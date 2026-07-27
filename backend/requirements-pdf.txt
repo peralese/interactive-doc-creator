@@ -1,0 +1,11 @@
+# Additional requirements for PDF generation
+# Install these AFTER installing requirements-minimal.txt
+# Requires system libraries: libavformat, libavcodec, libavdevice, libavutil, libavfilter, libswscale, libswresample
+
+# On Ubuntu/Debian:
+# sudo apt-get install -y ffmpeg libavcodec-dev libavformat-dev libavdevice-dev libavutil-dev libavfilter-dev libswscale-dev libswresample-dev
+
+# On macOS:
+# brew install ffmpeg pkg-config
+
+weasyprint>=60.2

@@ -1,0 +1,79 @@
+{
+  "id": "project-overview-v1",
+  "name": "Project Overview Document",
+  "description": "Comprehensive project overview for stakeholders",
+  "version": "1.0",
+  "sections": [
+    {
+      "id": "purpose",
+      "title": "Project Purpose",
+      "description": "Why this project exists",
+      "required": true,
+      "question_hints": [
+        "What problem does this project solve?",
+        "Who are the primary beneficiaries?",
+        "What is the expected impact?"
+      ]
+    },
+    {
+      "id": "stakeholders",
+      "title": "Stakeholders",
+      "description": "Key people and organizations involved",
+      "required": true,
+      "question_hints": [
+        "Who are the project sponsors?",
+        "Who are the key decision makers?",
+        "Who will be using the deliverables?"
+      ]
+    },
+    {
+      "id": "timeline",
+      "title": "Timeline and Milestones",
+      "description": "Project schedule and key dates",
+      "required": true,
+      "question_hints": [
+        "When does the project start?",
+        "What are the major milestones?",
+        "When is the expected completion date?"
+      ]
+    },
+    {
+      "id": "success_criteria",
+      "title": "Success Criteria",
+      "description": "How success will be measured",
+      "required": true,
+      "question_hints": [
+        "What defines project success?",
+        "What are the key performance indicators?",
+        "How will outcomes be measured?"
+      ]
+    },
+    {
+      "id": "scope",
+      "title": "Project Scope",
+      "description": "What is included and excluded",
+      "required": true,
+      "question_hints": [
+        "What is in scope for this project?",
+        "What is explicitly out of scope?",
+        "Are there any assumptions or constraints?"
+      ]
+    },
+    {
+      "id": "resources",
+      "title": "Resources Required",
+      "description": "Team, budget, and other resources",
+      "required": false,
+      "question_hints": [
+        "What team members are needed?",
+        "What is the budget?",
+        "What tools or infrastructure are required?"
+      ]
+    }
+  ],
+  "metadata": {
+    "estimated_duration": "15-20 minutes",
+    "difficulty": "beginner",
+    "category": "project-management"
+  }
+}
