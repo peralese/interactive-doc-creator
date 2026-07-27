@@ -52,10 +52,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ session_id: sessionId, template_id: templateId }),
     }),
-  followup: (sessionId, responseId, answer) =>
-    request("/api/questions/followup", {
+  reviewSection: (sessionId, sectionId) =>
+    request("/api/questions/section-review", {
       method: "POST",
-      body: JSON.stringify({ session_id: sessionId, response_id: responseId, answer }),
+      body: JSON.stringify({ session_id: sessionId, section_id: sectionId }),
     }),
   saveResponse: (data) =>
     request("/api/responses/", { method: "POST", body: JSON.stringify(data) }),

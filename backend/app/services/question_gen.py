@@ -56,8 +56,18 @@ def _is_basic_field_question(question: str) -> bool:
     return any(term in normalized for term in BASIC_FIELD_TERMS)
 
 
+def _is_closed_short_answer(question: str, answer: str) -> bool:
+    return len(answer.split()) <= 3 and bool(
+        re.match(
+            r"^(do|does|did|is|are|was|were|can|could|will|would|have|has)\b",
+            question.strip(),
+            re.IGNORECASE,
+        )
+    )
+
+
 class QuestionGenerator:
-    def __init__(self, db: AsyncSession, llm_provider: LLMProvider):
+    def __init__(self, db: AsyncSession, llm_provider: LLMProvider | None):
         self.db = db
         self.llm = llm_provider
 
@@ -78,13 +88,6 @@ class QuestionGenerator:
             for section in sections
             for hint in section.get("question_hints", [])
         ]
-        generated: list[str] = []
-        try:
-            generated = await self.llm.generate_questions(template.content, context or {})
-        except LLMProviderError as exc:
-            logger.warning("Using template questions because LLM is unavailable: %s", exc)
-        if len(generated) != len(hints):
-            generated = [hint for _, hint in hints]
         return [
             {
                 "question": question,
@@ -92,12 +95,14 @@ class QuestionGenerator:
                 "sequence_number": index,
                 "is_followup": False,
             }
-            for index, ((section_id, _), question) in enumerate(zip(hints, generated))
+            for index, (section_id, question) in enumerate(hints)
         ]
 
     async def generate_followup_question(
         self, question: str, answer: str, context: dict[str, Any] | None = None
     ) -> str | None:
+        if self.llm is None:
+            return None
         if _is_intentional_terminal_answer(answer) or _is_basic_field_question(question):
             return None
         if len(answer.split()) < 3:
@@ -107,3 +112,23 @@ class QuestionGenerator:
         except LLMProviderError as exc:
             logger.warning("Skipping optional follow-up because LLM is unavailable: %s", exc)
             return None
+
+    async def review_section(
+        self,
+        section: dict[str, Any],
+        responses: list[dict[str, Any]],
+        context: dict[str, Any] | None = None,
+    ) -> list[str]:
+        if self.llm is None or not responses:
+            return []
+        if not any(
+            not _is_basic_field_question(str(item.get("question", "")))
+            and not _is_intentional_terminal_answer(str(item.get("answer", "")))
+            and not _is_closed_short_answer(
+                str(item.get("question", "")),
+                str(item.get("answer", "")),
+            )
+            for item in responses
+        ):
+            return []
+        return await self.llm.review_section(section, responses, context or {})

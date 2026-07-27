@@ -64,6 +64,14 @@ class StubProvider(LLMProvider):
                 for hint in section.get("question_hints", [])
             ]
             return json.dumps([f"Please explain: {hint}" for hint in hints])
+        if "Review this completed interview section" in prompt:
+            return json.dumps(
+                [
+                    "What measurable result did the client observe?",
+                    "How was that result validated?",
+                    "This third question must be discarded.",
+                ]
+            )
         if "clarification" in prompt:
             return '{"question": null}'
         return "# Generated Project\n\nA synthesized result."
@@ -151,6 +159,7 @@ async def test_interview_to_document_flow(client):
     assert generated.status_code == 200
     question = generated.json()[0]
     assert question["section_id"] == "purpose"
+    assert question["question"] == "What problem is solved?"
 
     answer = await client.post(
         "/api/responses/",
@@ -234,6 +243,23 @@ async def test_narrative_answer_can_receive_one_model_followup():
 
 
 @pytest.mark.asyncio
+async def test_basic_section_does_not_call_model_for_review():
+    provider = FollowupProvider()
+    generator = QuestionGenerator(None, provider)
+
+    questions = await generator.review_section(
+        {"id": "personal-information"},
+        [
+            {"question": "What is the applicant's name?", "answer": "Erick Perales"},
+            {"question": "Do you have mentor approval?", "answer": "Not yet"},
+        ],
+    )
+
+    assert questions == []
+    assert provider.calls == 0
+
+
+@pytest.mark.asyncio
 async def test_followup_response_does_not_generate_another_followup(client):
     template = {
         "id": "bounded-followup-template",
@@ -277,6 +303,65 @@ async def test_followup_response_does_not_generate_another_followup(client):
 
     assert response.status_code == 200
     assert response.json() is None
+
+
+@pytest.mark.asyncio
+async def test_section_review_is_bounded_and_persisted(client):
+    template = {
+        "id": "section-review-template",
+        "name": "Section review",
+        "description": "Tests batched clarification",
+        "content": {
+            "sections": [
+                {
+                    "id": "outcome",
+                    "title": "Outcome",
+                    "question_hints": [
+                        "What outcome did the project produce?",
+                        "Who benefited from the outcome?",
+                    ],
+                }
+            ]
+        },
+    }
+    assert (await client.post("/api/templates/", json=template)).status_code == 201
+    session = await client.post(
+        "/api/sessions/",
+        json={"template_id": template["id"], "metadata": {}},
+    )
+    session_id = session.json()["id"]
+    for sequence, (question, answer) in enumerate(
+        [
+            ("What outcome did the project produce?", "Delivery became faster."),
+            ("Who benefited from the outcome?", "The client operations team benefited."),
+        ]
+    ):
+        saved = await client.post(
+            "/api/responses/",
+            json={
+                "session_id": session_id,
+                "section_id": "outcome",
+                "question": question,
+                "answer": answer,
+                "sequence_number": sequence,
+            },
+        )
+        assert saved.status_code == 201
+
+    first = await client.post(
+        "/api/questions/section-review",
+        json={"session_id": session_id, "section_id": "outcome"},
+    )
+    second = await client.post(
+        "/api/questions/section-review",
+        json={"session_id": session_id, "section_id": "outcome"},
+    )
+
+    assert first.status_code == 200
+    assert len(first.json()) == 2
+    assert second.json() == first.json()
+    resumed = await client.get(f"/api/sessions/{session_id}/resume")
+    assert resumed.json()["metadata"]["section_reviews"]["outcome"] == first.json()
 
 
 @pytest.mark.asyncio

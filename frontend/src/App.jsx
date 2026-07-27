@@ -27,6 +27,29 @@ const formatDate = (value) =>
     new Date(value),
   );
 
+const mergeSectionReviews = (approvedQuestions, metadata = {}) => {
+  const merged = [...approvedQuestions];
+  const reviews = metadata.section_reviews || {};
+  Object.entries(reviews).forEach(([sectionId, sectionQuestions]) => {
+    const additions = sectionQuestions.filter(
+      (candidate) =>
+        !merged.some(
+          (existing) =>
+            existing.is_followup
+            && existing.section_id === candidate.section_id
+            && existing.question === candidate.question,
+        ),
+    );
+    if (!additions.length) return;
+    const lastSectionIndex = merged.reduce(
+      (found, question, index) => (question.section_id === sectionId ? index : found),
+      -1,
+    );
+    merged.splice(lastSectionIndex + 1, 0, ...additions);
+  });
+  return merged;
+};
+
 function Spinner({ label = "Working…" }) {
   return (
     <span className="spinner-label">
@@ -805,7 +828,7 @@ export default function App() {
       const questionData = await api.questions(activeSession.id, selectedTemplate.id);
       setTemplate(selectedTemplate);
       setSession(activeSession);
-      setQuestions(questionData);
+      setQuestions(mergeSectionReviews(questionData, activeSession.metadata));
       setResponses(activeSession.responses || []);
       setView(destination);
     } catch (error) {
@@ -851,13 +874,26 @@ export default function App() {
     });
     setResponses((items) => [...items, saved]);
     if (question.is_followup) return;
+    const position = questions.indexOf(question);
+    const sectionIsComplete = !questions
+      .slice(position + 1)
+      .some((item) => !item.is_followup && item.section_id === question.section_id);
+    if (!sectionIsComplete) return;
     try {
-      const followup = await api.followup(session.id, saved.id, answer);
-      if (followup) {
+      const clarifications = await api.reviewSection(session.id, question.section_id);
+      if (clarifications.length) {
         setQuestions((items) => {
-          const position = items.indexOf(question);
           const next = [...items];
-          next.splice(position + 1, 0, followup);
+          const insertionPoint = next.indexOf(question) + 1;
+          const existing = new Set(
+            next
+              .filter((item) => item.is_followup)
+              .map((item) => `${item.section_id}:${item.question}`),
+          );
+          const additions = clarifications.filter(
+            (item) => !existing.has(`${item.section_id}:${item.question}`),
+          );
+          next.splice(insertionPoint, 0, ...additions);
           return next;
         });
       }

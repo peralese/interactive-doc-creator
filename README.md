@@ -5,7 +5,7 @@ A web-based application that guides users through creating structured documents 
 ## Features
 
 - 🎤 **Speech-to-Text**: Capture responses via voice using local Whisper model
-- 🤖 **AI-Powered Q&A**: Intelligent question generation and follow-ups using LLMs
+- 🤖 **AI-Assisted Interviews**: Requirements analysis plus bounded section-level clarification
 - 📝 **Template-Based**: Flexible document templates for various use cases
 - 💾 **Session Management**: Save progress and resume anytime
 - 📄 **Multiple Formats**: Export to Markdown, PDF, DOCX, or HTML
@@ -146,7 +146,9 @@ The application produces an unpublished draft containing:
 - Formatting and submission constraints
 - A requirement checklist linked to source excerpts
 
-Review and edit the draft, then choose **Save & start interview**.
+Review and edit the draft, then choose **Save & start interview**. The approved
+question list is saved with the template and reused unchanged when sessions start
+or resume.
 
 ### 2. Create a Template Manually
 
@@ -186,8 +188,12 @@ curl -X POST http://localhost:8000/api/sessions/ \
 Use the web interface to:
 - Record audio responses
 - See real-time transcription
-- Answer follow-up questions
+- Answer up to two targeted clarifications after a completed section
 - Review and edit responses
+
+OpenAI is not called after every answer. The application reviews all answers
+together once at the end of a section, persists any clarifications, and restores
+them without another model call when the session resumes.
 
 ### 5. Generate Document
 
@@ -221,8 +227,9 @@ curl -X POST http://localhost:8000/api/documents/generate \
 - `DELETE /api/responses/{id}` - Delete response
 
 ### Questions
-- `POST /api/questions/generate` - Generate questions
-- `POST /api/questions/followup` - Generate follow-up
+- `POST /api/questions/generate` - Load the approved template questions
+- `POST /api/questions/section-review` - Review a completed section and persist up to two clarifications
+- `POST /api/questions/followup` - Legacy single-answer follow-up endpoint
 - `GET /api/questions/next/{session_id}` - Get next question
 
 ### Documents

@@ -69,6 +69,29 @@ class LLMProvider(ABC):
         question_value = value.get("question")
         return question_value.strip() if isinstance(question_value, str) and question_value.strip() else None
 
+    async def review_section(
+        self,
+        section: dict[str, Any],
+        responses: list[dict[str, Any]],
+        context: dict[str, Any],
+    ) -> list[str]:
+        prompt = (
+            "Review this completed interview section for material gaps. Return only "
+            "a JSON array containing zero, one, or at most two concise clarification "
+            "questions. Consider all answers together. Do not repeat an approved "
+            "question, challenge an intentional N/A/unknown answer, or request more "
+            "detail when the supplied information is already sufficient.\n"
+            f"Section: {json.dumps(section)}\n"
+            f"Responses: {json.dumps(responses)}\n"
+            f"Context: {json.dumps(context)}"
+        )
+        value = _json_from_text(
+            await self._complete("You perform efficient section-level interview review.", prompt)
+        )
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise LLMProviderError("Section review response was not an array of strings")
+        return list(dict.fromkeys(item.strip() for item in value if item.strip()))[:2]
+
     async def generate_document(
         self, template: dict[str, Any], responses: list[dict[str, Any]]
     ) -> str:
