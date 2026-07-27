@@ -75,6 +75,6 @@ docs/_build/
 
 # Whisper models cache
 .cache/
-models/
+/models/
 
 # Made with Bob

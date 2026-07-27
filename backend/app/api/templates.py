@@ -67,8 +67,8 @@ async def ingest_template_requirements(
     """Create an unpublished, traceable template draft from TXT/Markdown requirements."""
     try:
         provider = create_llm_provider()
-    except LLMProviderError:
-        provider = None
+    except LLMProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     service = RequirementsIngestionService(provider)
     file_bytes = await source_file.read() if source_file is not None else None
     try:

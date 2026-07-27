@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from ..models.base import get_db
 from ..models.session import Session
@@ -61,7 +62,7 @@ async def get_session(
 ):
     """Get a specific session by ID."""
     result = await db.execute(
-        select(Session).where(Session.id == session_id)
+        select(Session).where(Session.id == session_id).options(selectinload(Session.responses))
     )
     session = result.scalar_one_or_none()
     

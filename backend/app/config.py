@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     template_storage_path: str = "../templates"
     
     # LLM Configuration
-    llm_default_provider: Literal["openai", "anthropic", "ollama"] = "ollama"
+    llm_default_provider: Literal["openai", "anthropic", "ollama"] = "openai"
     
     # OpenAI
     openai_api_key: str = ""

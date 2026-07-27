@@ -269,7 +269,7 @@ mypy app/
 
 ## Project Status
 
-This project is currently in **Phase 3: Requirements Ingestion**.
+This project is currently in **Phase 3B: Ingestion Reliability and Source Expansion**.
 
 ### Completed
 - ✅ Project structure
@@ -281,19 +281,27 @@ This project is currently in **Phase 3: Requirements Ingestion**.
 - ✅ Guided React interview interface
 - ✅ Browser audio recording, autosave/resume, editing, preview, and downloads
 - ✅ Documentation
+- ✅ Upload or paste TXT/Markdown requirements
+- ✅ Extract rules, required sections, and evaluation criteria
+- ✅ Generate a traceable draft template from those requirements
+- ✅ Review, edit, and save generated templates
+- ✅ Full question-list review before starting an interview
+- ✅ Bounded section-level clarification (0–2 per section, persisted across resume)
 
 ### Current
 
-- 🚧 Upload or paste document requirements
-- 🚧 Extract rules, required sections, and evaluation criteria
-- 🚧 Generate a traceable draft template from those requirements
+- 🚧 Re-test Markdown ingestion fix against a realistic complex source document
+- 🚧 Add sanitized ingestion fixture suite (headings, tables, form fields, checkboxes)
+- 🚧 Detect duplicate and suspiciously generic generated questions
+- 🚧 Switch to OpenAI Structured Outputs / JSON Schema for requirement analysis
+- 🚧 Add DOCX and text-based PDF source support
 
 ### Planned
 
-- ⏳ Template review, approval, versioning, and reuse
-- ⏳ Requirement-aware adaptive interviews
-- ⏳ Document validation against the original requirements
-- ⏳ End-to-end testing, packaging, and deployment
+- ⏳ Template review, approval, versioning, and reuse (Phase 4)
+- ⏳ Requirement-level coverage tracking through the interview (Phase 5)
+- ⏳ Document validation against the original requirements (Phase 5)
+- ⏳ End-to-end testing, packaging, and deployment (Phase 6)
 
 See [Product Roadmap and Implementation Status](docs/IMPLEMENTATION_STATUS.md)
 for phase definitions, exit gates, and the current capability snapshot.

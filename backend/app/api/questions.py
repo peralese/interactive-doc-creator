@@ -52,7 +52,7 @@ async def generate_questions(
     request: QuestionRequest, db: DbSession
 ):
     """Generate initial questions from template."""
-    session = await db.get(Session, request.session_id)
+    session = await db.get(Session, str(request.session_id))
     if session is None:
         raise HTTPException(status_code=404, detail=f"Session {request.session_id} not found")
     if session.template_id != request.template_id:
@@ -70,7 +70,7 @@ async def generate_questions(
 @router.post("/section-review", response_model=list[QuestionResponse])
 async def review_section(request: SectionReviewRequest, db: DbSession):
     """Review all answers in one section and persist at most two clarifications."""
-    session = await db.get(Session, request.session_id)
+    session = await db.get(Session, str(request.session_id))
     if session is None:
         raise HTTPException(status_code=404, detail=f"Session {request.session_id} not found")
 
@@ -145,8 +145,8 @@ async def generate_followup(
     request: FollowupRequest, db: DbSession
 ):
     """Generate a follow-up question based on the answer."""
-    response = await db.get(Response, request.response_id)
-    if response is None or response.session_id != request.session_id:
+    response = await db.get(Response, str(request.response_id))
+    if response is None or response.session_id != str(request.session_id):
         raise HTTPException(status_code=404, detail="Response not found in this session")
     if response.is_followup:
         return None
@@ -179,7 +179,7 @@ async def get_next_question(
     session_id: UUID, db: DbSession
 ):
     """Get the next question for a session."""
-    session = await db.get(Session, session_id)
+    session = await db.get(Session, str(session_id))
     if session is None:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
     questions = await QuestionGenerator(db, None).generate_initial_questions(

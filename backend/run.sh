@@ -7,16 +7,18 @@ echo "🚀 Interactive Document Creator - Backend Startup"
 echo "=================================================="
 echo ""
 
-# Check if virtual environment exists
-if [ -d "venv" ]; then
-    VENV_DIR="venv"
-elif [ -d ".venv" ]; then
+# Check if virtual environment exists (backend/.venv, then root .venv, then legacy venv)
+if [ -d ".venv" ]; then
     VENV_DIR=".venv"
+elif [ -d "../.venv" ]; then
+    VENV_DIR="../.venv"
+elif [ -d "venv" ]; then
+    VENV_DIR="venv"
 else
     echo "❌ Virtual environment not found!"
     echo "Please run setup first:"
-    echo "  python -m venv venv"
-    echo "  source venv/bin/activate"
+    echo "  python3 -m venv .venv"
+    echo "  source .venv/bin/activate"
     echo "  pip install -r requirements-minimal.txt"
     exit 1
 fi
@@ -59,6 +61,6 @@ echo "Press Ctrl+C to stop the server"
 echo ""
 
 # Start the server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 # Made with Bob
