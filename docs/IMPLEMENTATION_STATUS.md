@@ -1,7 +1,9 @@
 # Product Roadmap and Implementation Status
 
-**Last updated:** 2026-07-26  
-**Current phase:** Phase 3 — Requirements Ingestion  
+**Last updated:** 2026-07-27
+
+**Current phase:** Phase 3B — Ingestion Reliability and Source Expansion
+
 **Product goal:** Turn supplied document requirements into a reusable, guided
 interview that produces a validated document.
 
@@ -48,8 +50,10 @@ voice- or text-driven document session.
 - [x] Bundled Project Overview template
 - [x] Template selection
 - [x] Session creation, autosave, and resume
-- [x] Initial question generation
-- [x] Optional follow-up question generation
+- [x] Stable approved-question loading from saved templates
+- [x] Full generated-question review before an interview
+- [x] Bounded section-level clarification generation
+- [x] Persisted clarification questions across session resume
 - [x] Browser audio recording
 - [x] Local Whisper transcription
 - [x] Typed answers and response editing
@@ -65,15 +69,16 @@ website through document preview and export.
 
 **Known prototype limitations:**
 
-- Questions are generated from an already structured JSON template.
-- Follow-up adequacy checks are basic.
+- Imported requirements can generate structured templates, but complex source
+  conversion artifacts still require regression testing.
+- Clarification review is section-based rather than requirement-coverage-based.
 - Generated documents are not yet scored against source requirements.
 - WebSocket transcription returns a completed transcript rather than partial
   words while speaking.
 
 ---
 
-## Phase 3 — Requirements Ingestion 🚧 Current
+## Phase 3 — Requirements Ingestion 🚧 Phase 3A Complete; 3B Current
 
 **Outcome:** A non-technical user can supply the rules they received for a new
 document type and obtain a draft reusable template.
@@ -101,17 +106,30 @@ document type and obtain a draft reusable template.
 ### 3.3 Draft template generation
 
 - [x] Convert extracted requirements into the internal template schema
-- [x] Generate initial interview questions for every information requirement
+- [x] Generate interview questions for identified author-input prompts and fields
 - [x] Generate a requirement-coverage checklist
 - [x] Return a draft without publishing it automatically
 - [x] Add ingestion API and service tests
 
-**Exit gate:** A user can upload or paste a real requirements document and
-receive a traceable draft template without manually writing JSON.
+### 3.4 Ingestion reliability
+
+- [x] Remove escaped Markdown formatting before classifying uncovered content
+- [x] Ignore empty Markdown cells and table separator rows
+- [x] Recognize hash headings and bold-only converted headings
+- [x] Separate traceability context from author-input questions
+- [x] Prevent formatting artifacts from creating empty interview sections
+- [x] Add a regression test for table artifacts, form fields, and real prompts
+- [ ] Re-test the corrected pipeline against the complete BadgeMe source
+- [ ] Add a sanitized, realistic BadgeMe-style fixture to the repository
+- [ ] Detect duplicate, contradictory, and suspiciously generic questions
+- [ ] Use strict Structured Outputs/JSON Schema for model analysis
+
+**Phase 3A exit gate:** A user can upload or paste a real requirements document
+and receive a traceable draft template without manually writing JSON.
 
 ---
 
-## Phase 4 — Template Studio and Reuse 📋 Planned
+## Phase 4 — Template Studio and Reuse 🚧 Partially Implemented
 
 **Outcome:** The user can review, correct, approve, organize, and reuse
 generated document types.
@@ -120,6 +138,8 @@ generated document types.
 - [x] Edit name, purpose, audience, and tone
 - [x] Add, remove, and mark sections required
 - [x] Edit interview questions
+- [x] Review the complete approved question list before starting
+- [x] Return from an active interview to the complete question list
 - [ ] Reorder sections and edit coverage rules
 - [ ] Review extracted constraints beside their source passages
 - [ ] Highlight uncertain or conflicting requirements
@@ -128,14 +148,14 @@ generated document types.
 - [ ] Template versions and change history
 - [ ] Duplicate, archive, import, and export templates
 - [ ] Template library with categories and search
-- [ ] Start a session immediately after approval
+- [x] Start a session immediately after approval
 
 **Exit gate:** A generated template can be reviewed and published without
 developer tools, and then reused for multiple sessions.
 
 ---
 
-## Phase 5 — Adaptive Interview and Validated Generation 📋 Planned
+## Phase 5 — Adaptive Interview and Validated Generation 🚧 Partially Implemented
 
 **Outcome:** The application gathers enough information for every requirement
 and proves that the generated document satisfies the supplied rules.
@@ -144,15 +164,19 @@ and proves that the generated document satisfies the supplied rules.
 
 - [ ] Track coverage by requirement, not only by question number
 - [ ] Evaluate answer completeness before moving on
-- [ ] Ask targeted clarifying questions for missing information
-- [ ] Avoid repeated or low-value follow-ups
+- [x] Review completed narrative sections for targeted clarifications
+- [x] Limit section review to zero, one, or two clarification questions
+- [x] Persist generated clarifications and restore them without another LLM call
+- [x] Skip LLM review for basic fields, closed short answers, and intentional N/A
+- [ ] Drive clarification from explicit requirement-coverage gaps
+- [ ] Evaluate and suppress semantically repeated questions across sections
 - [ ] Let users skip, defer, or mark information unavailable
 - [ ] Show section and overall coverage
 - [ ] Preserve unsaved typed answers across refreshes
 
 ### 5.2 Grounded document generation
 
-- [ ] Generate using the approved template, source rules, and responses
+- [x] Generate using the approved template, source rules, and responses
 - [ ] Prevent unsupported facts and clearly mark unresolved placeholders
 - [ ] Apply required headings, ordering, tone, length, and formatting
 - [ ] Regenerate one section without replacing the whole document
@@ -205,10 +229,15 @@ and automated tests cover its critical paths.
 | Answer by voice or text | Working |
 | Local speech transcription | Working |
 | Generate and export a draft | Working |
-| Upload requirement documents | Not implemented |
-| Generate templates from requirements | Not implemented |
-| Review and publish generated templates | Not implemented |
-| Trace questions to source requirements | Not implemented |
+| Paste or upload TXT/Markdown requirements | Working |
+| Generate templates from requirements | Working |
+| Review, edit, and save generated templates | Working |
+| Review the complete approved question list | Working; final list is read-only |
+| Reuse approved questions without another LLM call | Working |
+| Section-level clarification review | Working; maximum two per section |
+| Trace extracted requirements to source lines | Working |
+| Trace each individual question to requirements | Not implemented |
+| DOCX/PDF requirement ingestion | Not implemented |
 | Validate output against source requirements | Not implemented |
 
 ## Immediate Next Milestone
@@ -223,8 +252,50 @@ and automated tests cover its critical paths.
 
 ### Immediate next milestone — Phase 3B
 
-1. Add DOCX extraction.
-2. Add text-based PDF extraction.
-3. Detect scanned PDFs and clearly report the need for OCR.
-4. Represent uncertain or conflicting extracted requirements.
-5. Add extraction fixtures from realistic requirement documents.
+Phase 3B should establish extraction reliability before expanding the number of
+supported file formats:
+
+1. Re-import the complete BadgeMe Markdown source and verify the corrected
+   question list against the previously valid questions 1–60.
+2. Add a sanitized BadgeMe-style fixture covering bold headings, escaped
+   formatting, empty table cells, separators, links, checkboxes, form fields,
+   and long table rows.
+3. Add duplicate-question, suspicious-generic-question, and maximum-question
+   validation.
+4. Replace free-form model JSON parsing with OpenAI Structured Outputs/JSON
+   Schema and explicit content classifications.
+5. Represent uncertain or conflicting extracted requirements.
+6. Add DOCX extraction.
+7. Add text-based PDF extraction.
+8. Detect scanned PDFs and clearly report the need for OCR.
+
+---
+
+## Current AI Call Policy
+
+The interview flow intentionally avoids calling the configured LLM after every
+answer:
+
+| Event | LLM call |
+|---|---|
+| Import requirements | Yes — analyze source and draft the reusable template |
+| Review or edit template | No |
+| Start or resume a session | No — load approved questions unchanged |
+| Save an individual answer | No |
+| Finish a narrative section | At most once — return zero to two clarifications |
+| Finish a basic-field, yes/no, or N/A-only section | No |
+| Resume reviewed section | No — restore persisted clarifications |
+| Preview document | No — deterministic Markdown preview |
+| Refine final document | Yes |
+
+The legacy single-answer follow-up endpoint remains available in the backend,
+but the frontend no longer calls it.
+
+## Latest Validation
+
+At commit `7f38553`:
+
+- Backend: 12 tests passed.
+- Frontend: ESLint passed.
+- Frontend: Vite production build passed.
+- One non-blocking Starlette warning remains concerning `httpx` deprecation.
