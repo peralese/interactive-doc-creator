@@ -31,7 +31,7 @@ an internal API or data model is not sufficient by itself.
 
 - [x] FastAPI backend and application configuration
 - [x] Async SQLite database
-- [x] Template, session, and response models
+- [x] Template, session, and response ORM models (`backend/app/models/`)
 - [x] CRUD APIs and validation schemas
 - [x] React/Vite frontend foundation
 - [x] Local development scripts and documentation
@@ -55,7 +55,7 @@ voice- or text-driven document session.
 - [x] Bounded section-level clarification generation
 - [x] Persisted clarification questions across session resume
 - [x] Browser audio recording
-- [x] Local Whisper transcription
+- [x] Local Whisper transcription (faster-whisper v1.2.1)
 - [x] Typed answers and response editing
 - [x] Session progress tracking
 - [x] Markdown document generation and preview
@@ -110,6 +110,7 @@ document type and obtain a draft reusable template.
 - [x] Generate a requirement-coverage checklist
 - [x] Return a draft without publishing it automatically
 - [x] Add ingestion API and service tests
+- [x] Surface LLM provider errors as HTTP 503 (no silent structural fallback)
 
 ### 3.4 Ingestion reliability
 
@@ -125,7 +126,10 @@ document type and obtain a draft reusable template.
 - [ ] Use strict Structured Outputs/JSON Schema for model analysis
 
 **Phase 3A exit gate:** A user can upload or paste a real requirements document
-and receive a traceable draft template without manually writing JSON.
+and receive a traceable draft template without manually writing JSON. ✅ Met.
+
+**Phase 3B exit gate:** The corrected pipeline passes a realistic fixture suite;
+extraction is reliable before format expansion begins.
 
 ---
 
@@ -140,7 +144,9 @@ generated document types.
 - [x] Edit interview questions
 - [x] Review the complete approved question list before starting
 - [x] Return from an active interview to the complete question list
+- [x] Start a session immediately after approval
 - [ ] Reorder sections and edit coverage rules
+- [ ] Edit, delete, and reorder questions from the question-list review screen
 - [ ] Review extracted constraints beside their source passages
 - [ ] Highlight uncertain or conflicting requirements
 - [ ] Validate the template before publication
@@ -148,7 +154,6 @@ generated document types.
 - [ ] Template versions and change history
 - [ ] Duplicate, archive, import, and export templates
 - [ ] Template library with categories and search
-- [x] Start a session immediately after approval
 
 **Exit gate:** A generated template can be reviewed and published without
 developer tools, and then reused for multiple sessions.
@@ -162,12 +167,12 @@ and proves that the generated document satisfies the supplied rules.
 
 ### 5.1 Adaptive interview
 
-- [ ] Track coverage by requirement, not only by question number
-- [ ] Evaluate answer completeness before moving on
 - [x] Review completed narrative sections for targeted clarifications
 - [x] Limit section review to zero, one, or two clarification questions
 - [x] Persist generated clarifications and restore them without another LLM call
 - [x] Skip LLM review for basic fields, closed short answers, and intentional N/A
+- [ ] Track coverage by requirement, not only by question number
+- [ ] Evaluate answer completeness before moving on
 - [ ] Drive clarification from explicit requirement-coverage gaps
 - [ ] Evaluate and suppress semantically repeated questions across sections
 - [ ] Let users skip, defer, or mark information unavailable
@@ -187,7 +192,7 @@ and proves that the generated document satisfies the supplied rules.
 - [ ] Check every source requirement against the draft
 - [ ] Show passed, failed, and unresolved requirements
 - [ ] Link validation results to source passages and document sections
-- [ ] Block “final” status when mandatory requirements are unresolved
+- [ ] Block "final" status when mandatory requirements are unresolved
 - [ ] Allow justified overrides with an audit note
 
 **Exit gate:** A completed session produces a document with a visible,
@@ -226,34 +231,27 @@ and automated tests cover its critical paths.
 |---|---|
 | Use a bundled JSON template | Working |
 | Start, save, and resume a session | Working |
-| Answer by voice or text | Working |
-| Local speech transcription | Working |
+| Answer by voice (Whisper) or text | Working |
+| Local speech transcription | Working — model downloads on first use |
 | Generate and export a draft | Working |
 | Paste or upload TXT/Markdown requirements | Working |
-| Generate templates from requirements | Working |
+| Generate templates from requirements | Working — OpenAI recommended |
 | Review, edit, and save generated templates | Working |
-| Review the complete approved question list | Working; final list is read-only |
+| Review the complete approved question list | Working; list is read-only post-generation |
 | Reuse approved questions without another LLM call | Working |
 | Section-level clarification review | Working; maximum two per section |
 | Trace extracted requirements to source lines | Working |
+| LLM provider error surfaced as HTTP 503 | Working |
 | Trace each individual question to requirements | Not implemented |
+| Edit/reorder questions from review screen | Not implemented |
 | DOCX/PDF requirement ingestion | Not implemented |
 | Validate output against source requirements | Not implemented |
 
-## Immediate Next Milestone
+---
 
-### Phase 3A ✅ Complete
+## Immediate Next Milestone — Phase 3B
 
-1. Paste or upload TXT/Markdown requirements.
-2. Extract and retain readable text and source metadata.
-3. Analyze the text into traceable requirements and a draft template.
-4. Review and edit the draft without publishing it automatically.
-5. Save the approved template and immediately start its interview.
-
-### Immediate next milestone — Phase 3B
-
-Phase 3B should establish extraction reliability before expanding the number of
-supported file formats:
+Phase 3B establishes extraction reliability before expanding format support:
 
 1. Re-import the complete BadgeMe Markdown source and verify the corrected
    question list against the previously valid questions 1–60.
@@ -291,11 +289,23 @@ answer:
 The legacy single-answer follow-up endpoint remains available in the backend,
 but the frontend no longer calls it.
 
+### LLM Provider Notes
+
+- **OpenAI `gpt-5.6-terra`** — verified to produce reliable structured JSON
+  for `analyze_requirements`. Temperature must be `1` (not `0.2`).
+- **Ollama `llama3.1:8b`** — available locally; responds correctly, but
+  produces poor-quality structured JSON for requirements analysis. Suitable
+  for document generation and section review, less so for ingestion.
+- **Anthropic** — adapter implemented; not tested against the current prompts.
+
+---
+
 ## Latest Validation
 
-At commit `7f38553`:
+At commit `ac9b965`:
 
-- Backend: 12 tests passed.
+- Backend: **12 tests passed**, 1 non-blocking `httpx` deprecation warning.
 - Frontend: ESLint passed.
 - Frontend: Vite production build passed.
-- One non-blocking Starlette warning remains concerning `httpx` deprecation.
+- End-to-end: Requirements imported and parsed successfully with OpenAI
+  `gpt-5.6-terra`; question list generated and displayed correctly.
