@@ -70,8 +70,13 @@ class DocumentGenerator:
         return content
 
     async def preview(self, session_id: UUID) -> str:
-        _, template, responses = await self._load(session_id)
-        return self._fallback_markdown(template, responses)
+        session, template, responses = await self._load(session_id)
+        if session.generated_document:
+            return session.generated_document
+        content = self._fallback_markdown(template, responses)
+        session.generated_document = content
+        await self.db.commit()
+        return content
 
     async def export(self, content: str, format: str) -> tuple[bytes, str]:
         if format == "markdown":

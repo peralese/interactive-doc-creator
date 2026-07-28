@@ -139,9 +139,10 @@ function Dashboard({ templates, sessions, loading, onStart, onResume, onImport }
           <div className="session-list">
             {sessions.slice(0, 5).map((session) => {
               const template = templates.find((item) => item.id === session.template_id);
+              const displayStatus = session.generated_document ? "draft" : session.status;
               return (
                 <button key={session.id} className="session-row" onClick={() => onResume(session)}>
-                  <span className={`status-dot ${session.status}`} />
+                  <span className={`status-dot ${displayStatus}`} />
                   <span className="session-copy">
                     <strong>{template?.name || session.template_id}</strong>
                     <small>
@@ -149,7 +150,7 @@ function Dashboard({ templates, sessions, loading, onStart, onResume, onImport }
                       {session.current_question_index + 1}
                     </small>
                   </span>
-                  <span className="status-pill">{session.status}</span>
+                  <span className="status-pill">{displayStatus}</span>
                   <ArrowRight size={18} />
                 </button>
               );
@@ -821,7 +822,12 @@ export default function App() {
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
 
-  const openSession = async (selectedTemplate, activeSession, destination = "interview") => {
+  const openSession = async (
+    selectedTemplate,
+    activeSession,
+    destination = "interview",
+    savedDocument = "",
+  ) => {
     setLoading(true);
     setMessage("");
     try {
@@ -830,6 +836,7 @@ export default function App() {
       setSession(activeSession);
       setQuestions(mergeSectionReviews(questionData, activeSession.metadata));
       setResponses(activeSession.responses || []);
+      setDocument(savedDocument);
       setView(destination);
     } catch (error) {
       setMessage(error.message);
@@ -842,7 +849,11 @@ export default function App() {
     setLoading(true);
     try {
       const created = await api.createSession(selectedTemplate.id);
-      await openSession(selectedTemplate, { ...created, responses: [] }, "review-questions");
+      await openSession(
+        selectedTemplate,
+        { ...created, responses: [] },
+        "review-questions",
+      );
     } catch (error) {
       setMessage(error.message);
       setLoading(false);
@@ -855,7 +866,12 @@ export default function App() {
     setLoading(true);
     try {
       const resumed = await api.resumeSession(savedSession.id);
-      await openSession(selectedTemplate, resumed);
+      await openSession(
+        selectedTemplate,
+        resumed,
+        resumed.generated_document ? "preview" : "interview",
+        resumed.generated_document || "",
+      );
     } catch (error) {
       setMessage(error.message);
       setLoading(false);

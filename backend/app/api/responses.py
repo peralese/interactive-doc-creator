@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from ..models.base import get_db
 from ..models.response import Response
+from ..models.session import Session
 from ..schemas.response import (
     ResponseCreate,
     ResponseUpdate,
@@ -26,9 +27,10 @@ async def create_response(
     """Create a new response."""
     manager = SessionManager(db)
     try:
-        await manager.get(response_data.session_id)
+        session = await manager.get(response_data.session_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    session.generated_document = None
     response = Response(**response_data.model_dump())
     db.add(response)
     await manager.record_progress(
@@ -96,7 +98,11 @@ async def update_response(
     update_data = response_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(response, field, value)
-    
+
+    session = await db.get(Session, response.session_id)
+    if session is not None:
+        session.generated_document = None
+
     await db.commit()
     await db.refresh(response)
     return response
@@ -119,6 +125,9 @@ async def delete_response(
             detail=f"Response {response_id} not found"
         )
     
+    session = await db.get(Session, response.session_id)
+    if session is not None:
+        session.generated_document = None
     await db.delete(response)
     await db.commit()
 

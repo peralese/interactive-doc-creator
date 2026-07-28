@@ -187,6 +187,19 @@ async def test_interview_to_document_flow(client):
 
     preview = await client.get(f"/api/documents/preview/{session_id}")
     assert "manual document assembly" in preview.json()["content"]
+    resumed_draft = await client.get(f"/api/sessions/{session_id}/resume")
+    assert resumed_draft.json()["generated_document"] == preview.json()["content"]
+
+    updated_answer = await client.patch(
+        f"/api/responses/{answer.json()['id']}",
+        json={"answer": "It eliminates repetitive document assembly and review."},
+    )
+    assert updated_answer.status_code == 200
+    invalidated = await client.get(f"/api/sessions/{session_id}/resume")
+    assert invalidated.json()["generated_document"] is None
+
+    refreshed_preview = await client.get(f"/api/documents/preview/{session_id}")
+    assert "document assembly and review" in refreshed_preview.json()["content"]
 
     generated_document = await client.post(
         "/api/documents/generate", json={"session_id": session_id, "format": "markdown"}
@@ -204,6 +217,54 @@ async def test_missing_resources_return_404(client):
     missing = uuid4()
     assert (await client.get(f"/api/questions/next/{missing}")).status_code == 404
     assert (await client.get(f"/api/documents/preview/{missing}")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_recent_sessions_only_include_sessions_with_saved_responses(client):
+    template = {
+        "id": "recent-session-template",
+        "name": "Recent session test",
+        "description": "Filters empty sessions",
+        "content": {
+            "sections": [
+                {
+                    "id": "purpose",
+                    "title": "Purpose",
+                    "question_hints": ["What is the purpose?"],
+                }
+            ]
+        },
+    }
+    assert (await client.post("/api/templates/", json=template)).status_code == 201
+    empty_session = await client.post(
+        "/api/sessions/",
+        json={"template_id": template["id"], "metadata": {}},
+    )
+    answered_session = await client.post(
+        "/api/sessions/",
+        json={"template_id": template["id"], "metadata": {}},
+    )
+    answered_id = answered_session.json()["id"]
+    saved = await client.post(
+        "/api/responses/",
+        json={
+            "session_id": answered_id,
+            "section_id": "purpose",
+            "question": "What is the purpose?",
+            "answer": "Only answered sessions should be resumable.",
+            "sequence_number": 0,
+        },
+    )
+    assert saved.status_code == 201
+
+    recent = await client.get("/api/sessions/")
+
+    assert recent.status_code == 200
+    assert recent.json()["total"] == 1
+    assert [item["id"] for item in recent.json()["sessions"]] == [answered_id]
+    assert empty_session.json()["id"] not in {
+        item["id"] for item in recent.json()["sessions"]
+    }
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,7 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from ..models.base import get_db
@@ -43,14 +43,21 @@ async def list_sessions(
     limit: int = 100,
     db: AsyncSession = Depends(get_db)
 ):
-    """List all sessions."""
+    """List resumable sessions that contain at least one saved response."""
+    has_responses = Session.responses.any()
     result = await db.execute(
-        select(Session).offset(skip).limit(limit)
+        select(Session)
+        .where(has_responses)
+        .order_by(Session.updated_at.desc())
+        .offset(skip)
+        .limit(limit)
     )
     sessions = result.scalars().all()
-    
-    count_result = await db.execute(select(Session))
-    total = len(count_result.scalars().all())
+
+    count_result = await db.execute(
+        select(func.count(Session.id)).where(has_responses)
+    )
+    total = count_result.scalar_one()
     
     return SessionListResponse(sessions=sessions, total=total)
 

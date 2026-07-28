@@ -71,6 +71,7 @@ h1, h2 { font-family: Georgia, serif; font-weight: 400; margin: 0; }
 .session-row { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 17px 20px; display: flex; align-items: center; gap: 14px; text-align: left; cursor: pointer; }
 .session-row:last-child { border: 0; }.session-row:hover { background: var(--paper); }
 .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #d39b49; }.status-dot.completed { background: #4c8b72; }
+.status-dot.draft { background: #4c8b72; }
 .session-copy { flex: 1; display: grid; gap: 3px; }.session-copy small { color: var(--muted); }
 .status-pill { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; border: 1px solid var(--line); border-radius: 20px; padding: 5px 8px; color: var(--muted); }
 .loading-card, .empty-state { border: 1px dashed #b9b9af; padding: 50px; text-align: center; border-radius: 8px; color: var(--muted); }
