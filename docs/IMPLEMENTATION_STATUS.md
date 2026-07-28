@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-27
 
-**Current phase:** Phase 3B — Ingestion Reliability and Source Expansion
+**Current phase:** Phase 4 — Template Studio and Reuse
 
 **Product goal:** Turn supplied document requirements into a reusable, guided
 interview that produces a validated document.
@@ -59,6 +59,8 @@ voice- or text-driven document session.
 - [x] Typed answers and response editing
 - [x] Session progress tracking
 - [x] Markdown document generation and preview
+- [x] Persisted generated drafts that reopen without regeneration
+- [x] Hide empty sessions from Recent sessions until an answer is saved
 - [x] Markdown, HTML, and DOCX export
 - [x] Optional PDF export
 - [x] OpenAI, Anthropic, and Ollama provider adapters
@@ -69,8 +71,8 @@ website through document preview and export.
 
 **Known prototype limitations:**
 
-- Imported requirements can generate structured templates, but complex source
-  conversion artifacts still require regression testing.
+- Complex Markdown conversion artifacts are covered by a sanitized realistic
+  regression fixture, but additional source formats remain unimplemented.
 - Clarification review is section-based rather than requirement-coverage-based.
 - Generated documents are not yet scored against source requirements.
 - WebSocket transcription returns a completed transcript rather than partial
@@ -78,7 +80,7 @@ website through document preview and export.
 
 ---
 
-## Phase 3 — Requirements Ingestion 🚧 Phase 3A Complete; 3B Current
+## Phase 3 — Requirements Ingestion ✅ Phase 3A and 3B Complete
 
 **Outcome:** A non-technical user can supply the rules they received for a new
 document type and obtain a draft reusable template.
@@ -101,7 +103,7 @@ document type and obtain a draft reusable template.
 - [x] Extract formatting, length, and submission constraints
 - [x] Extract evaluation criteria and mandatory questions
 - [x] Preserve traceability from each extracted rule to its source text
-- [ ] Represent uncertainty instead of silently inventing requirements
+- [x] Represent uncertainty and reject untraceable invented requirements
 
 ### 3.3 Draft template generation
 
@@ -120,16 +122,17 @@ document type and obtain a draft reusable template.
 - [x] Separate traceability context from author-input questions
 - [x] Prevent formatting artifacts from creating empty interview sections
 - [x] Add a regression test for table artifacts, form fields, and real prompts
-- [ ] Re-test the corrected pipeline against the complete BadgeMe source
-- [ ] Add a sanitized, realistic BadgeMe-style fixture to the repository
-- [ ] Detect duplicate, contradictory, and suspiciously generic questions
-- [ ] Use strict Structured Outputs/JSON Schema for model analysis
+- [x] Re-test the corrected pipeline against the complete BadgeMe source
+- [x] Add a sanitized, realistic BadgeMe-style fixture to the repository
+- [x] Detect duplicate, contradictory, suspiciously generic, and excessive questions
+- [x] Use strict OpenAI Structured Outputs/JSON Schema for model analysis
+- [x] Classify extracted content and record confidence
 
 **Phase 3A exit gate:** A user can upload or paste a real requirements document
 and receive a traceable draft template without manually writing JSON. ✅ Met.
 
 **Phase 3B exit gate:** The corrected pipeline passes a realistic fixture suite;
-extraction is reliable before format expansion begins.
+extraction is reliable before format expansion begins. ✅ Met.
 
 ---
 
@@ -242,6 +245,8 @@ and automated tests cover its critical paths.
 | Section-level clarification review | Working; maximum two per section |
 | Trace extracted requirements to source lines | Working |
 | LLM provider error surfaced as HTTP 503 | Working |
+| OpenAI Structured Outputs for ingestion | Working |
+| Duplicate/generic/untraceable output safeguards | Working |
 | Trace each individual question to requirements | Not implemented |
 | Edit/reorder questions from review screen | Not implemented |
 | DOCX/PDF requirement ingestion | Not implemented |
@@ -249,23 +254,18 @@ and automated tests cover its critical paths.
 
 ---
 
-## Immediate Next Milestone — Phase 3B
+## Immediate Next Milestone — Phase 4
 
-Phase 3B establishes extraction reliability before expanding format support:
+Phase 4 turns the saved templates into a manageable reusable library:
 
-1. Re-import the complete BadgeMe Markdown source and verify the corrected
-   question list against the previously valid questions 1–60.
-2. Add a sanitized BadgeMe-style fixture covering bold headings, escaped
-   formatting, empty table cells, separators, links, checkboxes, form fields,
-   and long table rows.
-3. Add duplicate-question, suspicious-generic-question, and maximum-question
-   validation.
-4. Replace free-form model JSON parsing with OpenAI Structured Outputs/JSON
-   Schema and explicit content classifications.
-5. Represent uncertain or conflicting extracted requirements.
-6. Add DOCX extraction.
-7. Add text-based PDF extraction.
-8. Detect scanned PDFs and clearly report the need for OCR.
+1. Add safe template archive/delete controls.
+2. Remove the bundled Project Overview example when it is no longer needed.
+3. Allow questions to be edited, deleted, and reordered from the full-list view.
+4. Add template publication state and version history.
+5. Show source requirement links beside questions.
+
+DOCX, text-based PDF, and scanned-PDF detection remain planned source-format
+expansions after the template-management milestone.
 
 ---
 
@@ -302,10 +302,11 @@ but the frontend no longer calls it.
 
 ## Latest Validation
 
-At commit `ac9b965`:
+In the current Phase 3B completion working tree:
 
-- Backend: **12 tests passed**, 1 non-blocking `httpx` deprecation warning.
+- Backend: **16 tests passed**, 1 non-blocking `httpx` deprecation warning.
 - Frontend: ESLint passed.
 - Frontend: Vite production build passed.
-- End-to-end: Requirements imported and parsed successfully with OpenAI
-  `gpt-5.6-terra`; question list generated and displayed correctly.
+- End-to-end: The user verified BadgeMe requirements import, questionnaire
+  generation, Whisper transcription, section clarification, deterministic
+  document creation, and OpenAI refinement.

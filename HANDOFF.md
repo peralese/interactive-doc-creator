@@ -6,7 +6,10 @@
 
 **Branch:** `main`
 
-**Current commit:** `ac9b965` — `Add missing models package and fix startup and provider issues`
+**Base commit:** `ea508cd` — `Save drafts and filter empty sessions`
+
+**Working tree:** Phase 3B completion changes are implemented and validated but
+not yet committed.
 
 ## Purpose of This Handoff
 
@@ -52,7 +55,8 @@ The following workflow is fully implemented and verified working:
    clarifications using all answers from that section.
 10. Preview a deterministic Markdown draft.
 11. Refine the document with the configured LLM.
-12. Export Markdown, HTML, DOCX, or optional PDF.
+12. Reopen the saved draft without regenerating it.
+13. Export Markdown, HTML, DOCX, or optional PDF.
 
 ## LLM Call Policy
 
@@ -95,6 +99,8 @@ frontend no longer calls it.
 - Typed responses.
 - OpenAI, Anthropic, and Ollama provider adapters.
 - Deterministic preview plus LLM document refinement.
+- Persisted drafts that reopen from Recent sessions without regeneration.
+- Recent sessions only list sessions after the first response is saved.
 - Markdown, HTML, DOCX, and optional PDF export.
 
 ### Phase 3A — Requirements Ingestion
@@ -140,9 +146,28 @@ several issues that prevented the application from starting:
 - **Diagnosed and fixed Ollama model name** — `.env` had `OLLAMA_MODEL=
   llama3.1:latest` but the installed model tag is `llama3.1:8b`; corrected.
 
-After all fixes: **12 backend tests pass**, ESLint passes, Vite build passes.
+At that checkpoint, **12 backend tests passed**, ESLint passed, and the Vite
+build passed.
 End-to-end flow verified: requirements imported and parsed successfully using
 OpenAI `gpt-5.6-terra`; question list generated correctly.
+
+### Phase 3B Completion
+
+- Verified the full BadgeMe workflow: import, generated questions, voice
+  transcription, section-level clarification, draft creation, and AI refinement.
+- Added a sanitized architect-profile fixture with headings, tables, empty
+  cells, links, fields, choices, narrative prompts, and constraints.
+- OpenAI requirement analysis now uses strict Structured Outputs/JSON Schema.
+- Extracted requirements include a content classification and confidence.
+- Untraceable requirements are rejected rather than silently accepted.
+- Duplicate requirements/questions are merged or removed.
+- Suspicious formatting questions and redundant generic questions are removed.
+- Potentially conflicting constraints and low-confidence extraction are surfaced
+  as review warnings.
+- Generated questionnaires are capped at 200 questions with a visible warning.
+
+Phase 3B is complete. The current product phase is Phase 4 — Template Studio
+and Reuse.
 
 ## Important Test Case and Findings
 
@@ -169,8 +194,9 @@ The fix:
 - only synthesizes questions for actual prompts or form fields;
 - avoids creating empty sections for contextual leftovers.
 
-**This fix has not yet been re-tested against a fresh BadgeMe import.**
-A new import is required to verify — do not use old saved templates.
+The corrected pipeline has now been re-tested through the complete BadgeMe
+workflow. A sanitized equivalent is stored as an automated regression fixture;
+old saved templates are not retroactively reanalyzed.
 
 ### Ollama vs OpenAI for Requirements Analysis
 
@@ -329,7 +355,7 @@ pytest -q
 Expected result:
 
 ```text
-12 passed, 1 warning
+16 passed, 1 warning
 ```
 
 The one warning is a non-blocking Starlette deprecation notice about `httpx`.
@@ -370,7 +396,9 @@ Both should pass with no errors.
 - `frontend/src/services/api.js`
   — frontend API client.
 - `backend/tests/test_phase2.py`
-  — current integration and regression tests (12 passing).
+  — current integration and regression tests (16 passing).
+- `backend/tests/fixtures/architect_profile_requirements.md`
+  — sanitized realistic ingestion regression fixture.
 
 ## Current API Highlights
 
@@ -394,55 +422,30 @@ Both should pass with no errors.
 1. Only pasted text, TXT, and Markdown requirements are supported; DOCX and
    PDF ingestion are not implemented.
 2. Scanned PDF/OCR detection is not implemented.
-3. Requirement analysis uses prompt-generated JSON rather than OpenAI
-   Structured Outputs/JSON Schema; Ollama quality for this task is poor.
-4. The Markdown cleanup is heuristic and needs more realistic test fixtures.
-5. The post-generation question list is read-only; questions can only be
+3. Ollama requirement-analysis quality remains weaker than OpenAI.
+4. The post-generation question list is read-only; questions can only be
    edited in the earlier template-review screen.
-6. Requirement coverage is stored but interview progress is question-based,
+5. Requirement coverage is stored but interview progress is question-based,
    not requirement-based.
-7. Final documents are not validated against source requirements.
-8. The legacy per-answer follow-up endpoint remains in the backend.
-9. Unsaved text in the current textarea is lost on a browser refresh.
-10. No browser end-to-end test suite exists.
-11. Authentication, multi-user isolation, deployment packaging, and production
+6. Final documents are not validated against source requirements.
+7. The legacy per-answer follow-up endpoint remains in the backend.
+8. Unsaved text in the current textarea is lost on a browser refresh.
+9. No browser end-to-end test suite exists.
+10. Authentication, multi-user isolation, deployment packaging, and production
     hardening are not implemented.
 
 ## Recommended Next Steps
 
-### Priority 1 — Re-test the Real Markdown Import
+### Priority 1 — Improve Template/Question Review
 
-1. Confirm the BadgeMe Markdown file is on this machine.
-2. Import it as a new requirements document (not the old saved template).
-3. Confirm formatting artifacts no longer appear as questions.
-4. Compare the new list against the previously valid questions 1–60.
-5. Record any missing, duplicated, or misclassified prompts as test fixtures.
-
-### Priority 2 — Add a Realistic Ingestion Fixture Suite
-
-- Add a sanitized BadgeMe-style fixture under `backend/tests/`.
-- Cover: bold headings, escaped formatting, empty cells, separator rows,
-  links, checkboxes, form fields, and long `<br>` table rows.
-- Assert real prompts are retained; formatting artifacts never become questions.
-- Add duplicate-question and maximum-question-count assertions.
-
-### Priority 3 — Use OpenAI Structured Outputs
-
-- Replace free-form JSON extraction/repair with a strict JSON Schema.
-- Add explicit content type enum: heading, instruction, form field, choice,
-  narrative prompt, constraint, reference.
-- Validate every model response before publishing a draft.
-- Represent uncertainty and conflicts explicitly.
-
-### Priority 4 — Improve Template/Question Review
-
+- Add safe archive/delete controls and remove the bundled example template.
 - Allow editing, deleting, and reordering questions from the question-list
   review screen (currently read-only after generation).
 - Add a clear "approved/published" template state.
 - Add template version history.
 - Show source requirement links beside each question.
 
-### Priority 5 — Requirement-Level Interview Coverage
+### Priority 2 — Requirement-Level Interview Coverage
 
 - Track which answers satisfy which requirements.
 - Show section and total coverage during the interview.
@@ -450,7 +453,7 @@ Both should pass with no errors.
 - Run section review only when coverage indicates a material gap.
 - Validate the generated document against required source rules.
 
-### Priority 6 — Additional Source Formats
+### Priority 3 — Additional Source Formats
 
 - Add DOCX extraction first.
 - Add text-based PDF extraction.

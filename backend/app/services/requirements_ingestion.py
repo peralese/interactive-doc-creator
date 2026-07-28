@@ -100,6 +100,50 @@ def _requests_author_input(raw: str) -> bool:
     )
 
 
+def _canonical_text(value: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", value.lower()))
+
+
+def _is_suspicious_question(value: str) -> bool:
+    text = _canonical_text(value)
+    return any(
+        phrase in text
+        for phrase in (
+            "what content belongs in this table cell",
+            "what table separator",
+            "what table structure",
+            "what is the section title",
+            "what is the document title",
+        )
+    )
+
+
+def _is_generic_question(value: str) -> bool:
+    text = _canonical_text(value)
+    return text.startswith(
+        (
+            "what information should be included in",
+            "what information is required for",
+            "please provide information for",
+        )
+    )
+
+
+def _content_type(raw: str) -> str:
+    text = _plain_markdown_text(raw)
+    if _markdown_heading(raw):
+        return "heading"
+    if re.search(r"\b(yes\s*/\s*no|choose one|check one|select)\b", text, re.I):
+        return "choice"
+    if _requests_author_input(raw):
+        return "narrative_prompt" if "?" in text or len(text) > 80 else "form_field"
+    if re.search(r"\b(words?|pages?|format|font|tone|deadline|submit)\b", text, re.I):
+        return "constraint"
+    if re.search(r"https?://|\brefer to\b", raw, re.I):
+        return "reference"
+    return "instruction"
+
+
 class RequirementsIngestionService:
     allowed_suffixes: ClassVar[set[str]] = {".txt", ".md", ".markdown"}
 
@@ -243,31 +287,71 @@ class RequirementsIngestionService:
     def _normalize(
         analysis: dict[str, Any], source: IngestionSource, lines: list[str]
     ) -> dict[str, Any]:
+        analysis_warnings: list[str] = []
         raw_requirements = analysis.get("requirements")
         if not isinstance(raw_requirements, list) or not raw_requirements:
             raise RequirementsIngestionError("Analysis did not identify any requirements")
         requirements = []
         known_ids = set()
+        source_id_map: dict[str, str] = {}
+        requirement_by_text: dict[str, dict[str, Any]] = {}
         for index, item in enumerate(raw_requirements[:100], 1):
             if not isinstance(item, dict) or not str(item.get("text", "")).strip():
                 continue
-            identifier = f"req-{index:03d}"
             source_lines = [
                 number
                 for number in item.get("source_lines", [])
                 if isinstance(number, int) and 1 <= number <= len(lines)
             ]
+            original_id = str(item.get("id", f"req-{index:03d}"))
+            if not source_lines:
+                analysis_warnings.append(
+                    f"Ignored an untraceable requirement: {str(item['text']).strip()}"
+                )
+                continue
+            canonical = _canonical_text(str(item["text"]))
+            if canonical in requirement_by_text:
+                existing = requirement_by_text[canonical]
+                source_id_map[original_id] = existing["id"]
+                existing["source_lines"] = sorted(
+                    set(existing["source_lines"]) | set(source_lines)
+                )
+                existing["source_excerpt"] = "\n".join(
+                    lines[number - 1].strip() for number in existing["source_lines"]
+                )
+                if existing["required"] != bool(item.get("required", True)):
+                    analysis_warnings.append(
+                        f"Requirement appears both required and optional: {item['text']}"
+                    )
+                else:
+                    analysis_warnings.append(
+                        f"Merged duplicate requirement: {str(item['text']).strip()}"
+                    )
+                continue
+            identifier = f"req-{len(requirements) + 1:03d}"
             excerpt = "\n".join(lines[number - 1].strip() for number in source_lines)
-            requirements.append(
-                {
-                    "id": identifier,
-                    "text": str(item["text"]).strip(),
-                    "required": bool(item.get("required", True)),
-                    "source_lines": source_lines,
-                    "source_excerpt": excerpt,
-                }
-            )
+            requirement = {
+                "id": identifier,
+                "text": str(item["text"]).strip(),
+                "required": bool(item.get("required", True)),
+                "source_lines": source_lines,
+                "source_excerpt": excerpt,
+                "content_type": str(item.get("content_type", "")).strip()
+                or _content_type(lines[source_lines[0] - 1]),
+                "confidence": str(item.get("confidence", "")).strip() or "medium",
+            }
+            if requirement["confidence"] == "low":
+                analysis_warnings.append(
+                    f"Review low-confidence requirement: {requirement['text']}"
+                )
+            requirements.append(requirement)
+            requirement_by_text[canonical] = requirement
+            source_id_map[original_id] = identifier
             known_ids.add(identifier)
+        if not requirements:
+            raise RequirementsIngestionError(
+                "Analysis did not identify any traceable requirements"
+            )
         covered_lines = {
             number for requirement in requirements for number in requirement["source_lines"]
         }
@@ -289,6 +373,8 @@ class RequirementsIngestionService:
                     ),
                     "source_lines": [line_number],
                     "source_excerpt": raw_line.strip(),
+                    "content_type": _content_type(raw_line),
+                    "confidence": "high",
                 }
             )
             known_ids.add(identifier)
@@ -307,11 +393,15 @@ class RequirementsIngestionService:
             requested_ids = item.get("requirement_ids", [])
             mapped_ids = []
             for requested in requested_ids:
-                match = re.search(r"(\d+)$", str(requested))
-                if match:
-                    normalized = f"req-{int(match.group(1)):03d}"
-                    if normalized in known_ids:
-                        mapped_ids.append(normalized)
+                normalized = source_id_map.get(str(requested))
+                if normalized is None:
+                    match = re.search(r"(\d+)$", str(requested))
+                    if match:
+                        normalized = source_id_map.get(
+                            f"req-{int(match.group(1)):03d}"
+                        )
+                if normalized in known_ids:
+                    mapped_ids.append(normalized)
             questions = [
                 str(question).strip()
                 for question in item.get("questions", [])
@@ -376,11 +466,67 @@ class RequirementsIngestionService:
         unassigned = known_ids - used_ids
         if unassigned:
             sections[0]["requirement_ids"].extend(sorted(unassigned))
+        seen_questions: set[str] = set()
+        retained_question_count = 0
+        maximum_questions = 200
+        for section in sections:
+            cleaned_questions = []
+            section_questions = section["question_hints"]
+            for question in section_questions:
+                canonical = _canonical_text(question)
+                if not canonical or _is_suspicious_question(question):
+                    analysis_warnings.append(
+                        f"Removed suspicious generated question: {question}"
+                    )
+                    continue
+                if canonical in seen_questions:
+                    analysis_warnings.append(
+                        f"Removed duplicate generated question: {question}"
+                    )
+                    continue
+                if _is_generic_question(question) and len(section_questions) > 1:
+                    analysis_warnings.append(
+                        f"Removed generic generated question: {question}"
+                    )
+                    continue
+                if _is_generic_question(question):
+                    analysis_warnings.append(
+                        f"Review this generic generated question: {question}"
+                    )
+                if retained_question_count >= maximum_questions:
+                    analysis_warnings.append(
+                        f"Question list was limited to {maximum_questions} questions."
+                    )
+                    continue
+                seen_questions.add(canonical)
+                cleaned_questions.append(question)
+                retained_question_count += 1
+            section["question_hints"] = cleaned_questions
+        sections = [
+            section
+            for section in sections
+            if section["requirement_ids"] or section["question_hints"]
+        ]
+        if not sections:
+            raise RequirementsIngestionError(
+                "Analysis did not produce any usable interview sections"
+            )
         constraints = [
             item
             for item in analysis.get("constraints", [])
             if isinstance(item, dict) and str(item.get("value", "")).strip()
         ]
+        constraint_values: dict[str, set[str]] = {}
+        for constraint in constraints:
+            kind = _canonical_text(str(constraint.get("type", "")))
+            constraint_values.setdefault(kind, set()).add(
+                _canonical_text(str(constraint["value"]))
+            )
+        for kind, values in constraint_values.items():
+            if kind in {"length", "word count", "page count", "tone"} and len(values) > 1:
+                analysis_warnings.append(
+                    f"Review potentially conflicting {kind} constraints."
+                )
         name = str(analysis.get("name", "")).strip() or Path(source.filename).stem.title()
         return {
             "id": f"{_slug(name)}-{uuid4().hex[:6]}",
@@ -395,6 +541,7 @@ class RequirementsIngestionService:
                 "sections": sections,
                 "requirements": requirements,
                 "constraints": constraints,
+                "analysis_warnings": list(dict.fromkeys(analysis_warnings)),
                 "source": {
                     "filename": source.filename,
                     "media_type": source.media_type,
@@ -424,4 +571,5 @@ class RequirementsIngestionService:
             )
             analysis = self._fallback_analysis(source)
             template = self._normalize(analysis, source, lines)
+        warnings.extend(template["content"].get("analysis_warnings", []))
         return template, used_fallback, warnings

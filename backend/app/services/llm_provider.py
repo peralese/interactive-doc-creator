@@ -11,6 +11,106 @@ import httpx
 
 from ..config import settings
 
+REQUIREMENTS_ANALYSIS_SCHEMA: dict[str, Any] = {
+    "name": "requirements_analysis",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            key: {"type": "string"}
+            for key in ("name", "description", "purpose", "audience", "tone", "category")
+        }
+        | {
+            "sections": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "title": {"type": "string"},
+                        "description": {"type": "string"},
+                        "required": {"type": "boolean"},
+                        "requirement_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                        },
+                        "questions": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": [
+                        "title",
+                        "description",
+                        "required",
+                        "requirement_ids",
+                        "questions",
+                    ],
+                },
+            },
+            "requirements": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "id": {"type": "string"},
+                        "text": {"type": "string"},
+                        "required": {"type": "boolean"},
+                        "source_lines": {"type": "array", "items": {"type": "integer"}},
+                        "content_type": {
+                            "type": "string",
+                            "enum": [
+                                "heading",
+                                "instruction",
+                                "form_field",
+                                "choice",
+                                "narrative_prompt",
+                                "constraint",
+                                "reference",
+                            ],
+                        },
+                        "confidence": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"],
+                        },
+                    },
+                    "required": [
+                        "id",
+                        "text",
+                        "required",
+                        "source_lines",
+                        "content_type",
+                        "confidence",
+                    ],
+                },
+            },
+            "constraints": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "type": {"type": "string"},
+                        "value": {"type": "string"},
+                        "requirement_id": {"type": "string"},
+                    },
+                    "required": ["type", "value", "requirement_id"],
+                },
+            },
+        },
+        "required": [
+            "name",
+            "description",
+            "purpose",
+            "audience",
+            "tone",
+            "category",
+            "sections",
+            "requirements",
+            "constraints",
+        ],
+    },
+}
+
 
 class LLMProviderError(RuntimeError):
     """Raised when an LLM provider cannot complete a request."""
@@ -112,11 +212,14 @@ class LLMProvider(ABC):
             '"tone":str,"category":str,"sections":[{"title":str,'
             '"description":str,"required":bool,"requirement_ids":[str],'
             '"questions":[str]}],"requirements":[{"id":str,"text":str,'
-            '"required":bool,"source_lines":[int]}],"constraints":[{"type":str,'
+            '"required":bool,"source_lines":[int],"content_type":str,'
+            '"confidence":str}],"constraints":[{"type":str,'
             '"value":str,"requirement_id":str}]}. '
             "Every requirement id must look like req-001 and be used by at "
             "least one section. Source lines must point to supporting input. "
-            "Do not invent rules. Use empty strings or arrays when unknown. "
+            "Classify each requirement as heading, instruction, form_field, choice, "
+            "narrative_prompt, constraint, or reference, with high, medium, or low "
+            "confidence. Do not invent rules. Use empty strings or arrays when unknown. "
             "Questions should ask the document author for content, not ask what "
             "the instructions mean.\n\nSOURCE:\n"
             f"{numbered_source}"
@@ -151,6 +254,45 @@ class OpenAIProvider(LLMProvider):
                 ],
             )
             return response.choices[0].message.content or ""
+        except Exception as exc:
+            raise LLMProviderError(f"OpenAI request failed: {exc}") from exc
+
+    async def analyze_requirements(self, numbered_source: str) -> dict[str, Any]:
+        """Use OpenAI Structured Outputs for the ingestion boundary."""
+        prompt = (
+            "Analyze the numbered source into a reusable document interview. "
+            "Every requirement must cite supporting source line numbers. Do not "
+            "invent rules. Questions must request information from the document "
+            "author; never ask about Markdown, tables, headings, or instructions. "
+            "Classify every requirement and report high, medium, or low confidence. "
+            "Use empty strings or arrays when the source is uncertain.\n\nSOURCE:\n"
+            f"{numbered_source}"
+        )
+        try:
+            response = await self.client.chat.completions.create(
+                model=settings.openai_model,
+                temperature=settings.openai_temperature,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": REQUIREMENTS_ANALYSIS_SCHEMA,
+                },
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You extract document requirements with strict source "
+                            "traceability."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+            )
+            value = _json_from_text(response.choices[0].message.content or "")
+            if not isinstance(value, dict):
+                raise LLMProviderError("Requirements analysis was not a JSON object")
+            return value
+        except LLMProviderError:
+            raise
         except Exception as exc:
             raise LLMProviderError(f"OpenAI request failed: {exc}") from exc
 

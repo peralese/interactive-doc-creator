@@ -14,7 +14,7 @@ from app.api import documents, questions, templates, transcriptions
 from app.config import settings
 from app.main import app
 from app.models.base import Base, get_db
-from app.services.llm_provider import LLMProvider
+from app.services.llm_provider import LLMProvider, OpenAIProvider
 from app.services.question_gen import QuestionGenerator
 from app.services.requirements_ingestion import IngestionSource, RequirementsIngestionService
 
@@ -552,4 +552,177 @@ def test_markdown_table_artifacts_do_not_become_interview_questions():
         phrase in question.lower()
         for question in questions
         for phrase in ("table separator", "table cell", "| --- |", "document title")
+    )
+
+
+def test_realistic_architect_fixture_filters_unreliable_analysis():
+    fixture = Path(__file__).parent / "fixtures" / "architect_profile_requirements.md"
+    source = IngestionSource(
+        filename=fixture.name,
+        media_type="text/markdown",
+        text=fixture.read_text(encoding="utf-8"),
+    )
+    lines = source.text.splitlines()
+
+    def line_containing(value):
+        return next(index for index, line in enumerate(lines, 1) if value in line)
+
+    analysis = {
+        "name": "Architect Project Profile",
+        "description": "Evidence profile",
+        "purpose": "Document project evidence",
+        "audience": "Certification reviewers",
+        "tone": "Professional",
+        "category": "certification",
+        "requirements": [
+            {
+                "id": "req-001",
+                "text": "Describe the business problem.",
+                "required": True,
+                "source_lines": [line_containing("business opportunity")],
+            },
+            {
+                "id": "req-002",
+                "text": "Describe the business problem.",
+                "required": True,
+                "source_lines": [line_containing("business and mission")],
+            },
+            {
+                "id": "req-003",
+                "text": "Include confidential revenue figures.",
+                "required": True,
+                "source_lines": [],
+            },
+            {
+                "id": "req-004",
+                "text": "Describe strategic architectural decisions.",
+                "required": True,
+                "source_lines": [line_containing("strategic architectural")],
+            },
+        ],
+        "sections": [
+            {
+                "title": "Business environment and context",
+                "description": "Business context",
+                "required": True,
+                "requirement_ids": ["req-001", "req-002", "req-003"],
+                "questions": [
+                    "What business problem did the project address?",
+                    "What content belongs in this table cell?",
+                    "What information should be included in Business environment and context?",
+                ],
+            },
+            {
+                "title": "Strategic leadership",
+                "description": "Leadership evidence",
+                "required": True,
+                "requirement_ids": ["req-004"],
+                "questions": [
+                    "What business problem did the project address?",
+                    "How did you drive strategic architectural decisions?",
+                ],
+            },
+        ],
+        "constraints": [],
+    }
+
+    template = RequirementsIngestionService._normalize(analysis, source, lines)
+    content = template["content"]
+    questions = [
+        question
+        for section in content["sections"]
+        for question in section["question_hints"]
+    ]
+
+    assert len(content["requirements"]) >= 2
+    assert not any("confidential revenue" in item["text"] for item in content["requirements"])
+    assert questions.count("What business problem did the project address?") == 1
+    assert not any("table cell" in question.lower() for question in questions)
+    assert not any(
+        question.startswith("What information should be included")
+        for question in questions
+    )
+    assert any("untraceable requirement" in warning for warning in content["analysis_warnings"])
+    assert any("duplicate requirement" in warning for warning in content["analysis_warnings"])
+    assert any("duplicate generated question" in warning for warning in content["analysis_warnings"])
+
+
+@pytest.mark.asyncio
+async def test_openai_requirements_analysis_uses_strict_json_schema(monkeypatch):
+    captured = {}
+
+    class FakeCompletions:
+        async def create(self, **kwargs):
+            captured.update(kwargs)
+            message = type("Message", (), {"content": json.dumps({
+                "name": "Profile",
+                "description": "",
+                "purpose": "",
+                "audience": "",
+                "tone": "",
+                "category": "",
+                "sections": [],
+                "requirements": [],
+                "constraints": [],
+            })})()
+            choice = type("Choice", (), {"message": message})()
+            return type("Response", (), {"choices": [choice]})()
+
+    provider = object.__new__(OpenAIProvider)
+    provider.client = type(
+        "Client",
+        (),
+        {"chat": type("Chat", (), {"completions": FakeCompletions()})()},
+    )()
+
+    result = await provider.analyze_requirements("[L1] # Profile")
+
+    assert result["name"] == "Profile"
+    assert captured["response_format"]["type"] == "json_schema"
+    schema = captured["response_format"]["json_schema"]
+    assert schema["strict"] is True
+    assert schema["schema"]["additionalProperties"] is False
+
+
+def test_requirements_analysis_caps_generated_question_count():
+    source = IngestionSource(
+        filename="large.md",
+        media_type="text/markdown",
+        text="# Large profile\nDescribe the project.",
+    )
+    analysis = {
+        "name": "Large profile",
+        "description": "",
+        "purpose": "",
+        "audience": "",
+        "tone": "",
+        "category": "",
+        "requirements": [
+            {
+                "id": "req-001",
+                "text": "Describe the project.",
+                "required": True,
+                "source_lines": [2],
+            }
+        ],
+        "sections": [
+            {
+                "title": "Project",
+                "description": "",
+                "required": True,
+                "requirement_ids": ["req-001"],
+                "questions": [f"Question number {number}?" for number in range(201)],
+            }
+        ],
+        "constraints": [],
+    }
+
+    template = RequirementsIngestionService._normalize(
+        analysis, source, source.text.splitlines()
+    )
+
+    assert len(template["content"]["sections"][0]["question_hints"]) == 200
+    assert any(
+        "limited to 200 questions" in warning
+        for warning in template["content"]["analysis_warnings"]
     )
