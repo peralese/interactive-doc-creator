@@ -61,8 +61,11 @@ class DocumentGenerator:
             }
             for response in responses
         ]
+        output_type = session.output_type or "report"
         try:
-            content = await self.llm.generate_document(template.content, response_data)
+            content = await self.llm.generate_document(
+                template.content, response_data, output_type=output_type
+            )
         except LLMProviderError:
             content = self._fallback_markdown(template, responses)
         session.generated_document = content

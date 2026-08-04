@@ -22,6 +22,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAudioRecorder } from "./hooks/useAudioRecorder";
 import { api } from "./services/api";
 
+const OUTPUT_TYPE_LABELS = { report: "Report", blog_post: "Blog Post", summary: "Summary" };
+
 const formatDate = (value) =>
   new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(
     new Date(value),
@@ -68,8 +70,15 @@ function EmptyState({ title, detail }) {
   );
 }
 
-function NameSessionModal({ template, onConfirm, onCancel }) {
+const OUTPUT_TYPES = [
+  { value: "report",    label: "Report",    subtext: "Structured, section-by-section, formal" },
+  { value: "blog_post", label: "Blog Post", subtext: "Narrative, first-person, conversational" },
+  { value: "summary",   label: "Summary",   subtext: "Short opener + key bullet points" },
+];
+
+function NameSessionModal({ template, onConfirm, onCancel, defaultOutputType, nameOnly }) {
   const [name, setName] = useState("");
+  const [outputType, setOutputType] = useState(defaultOutputType || "report");
   const placeholder = `e.g. "${template?.name} – ${new Date().toLocaleDateString(undefined, { month: "short", year: "numeric" })}"`;
   return (
     <div className="modal-backdrop">
@@ -86,15 +95,30 @@ function NameSessionModal({ template, onConfirm, onCancel }) {
           placeholder={placeholder}
           value={name}
           onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) onConfirm(name.trim()); }}
+          onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) onConfirm(name.trim(), outputType); }}
           autoFocus
         />
+        {!nameOnly && (
+          <div className="output-type-grid">
+            {OUTPUT_TYPES.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                className={`output-type-card${outputType === opt.value ? " selected" : ""}`}
+                onClick={() => setOutputType(opt.value)}
+              >
+                <strong>{opt.label}</strong>
+                <small>{opt.subtext}</small>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="modal-actions">
           <button className="secondary-button" onClick={onCancel}>Cancel</button>
           <button
             className="primary-button"
             disabled={!name.trim()}
-            onClick={() => onConfirm(name.trim())}
+            onClick={() => onConfirm(name.trim(), outputType)}
           >
             Start session
           </button>
@@ -188,6 +212,7 @@ function Dashboard({ templates, sessions, loading, onStart, onResume, onImport, 
                         {session.current_question_index + 1}
                       </small>
                     </span>
+                    <span className="output-type-badge">{OUTPUT_TYPE_LABELS[session.output_type] || "Report"}</span>
                     <span className="status-pill">{displayStatus}</span>
                     <ArrowRight size={18} />
                   </button>
@@ -898,11 +923,11 @@ export default function App() {
     setNamingTemplate(selectedTemplate);
   };
 
-  const startNamed = async (selectedTemplate, name) => {
+  const startNamed = async (selectedTemplate, name, outputType) => {
     setNamingTemplate(null);
     setLoading(true);
     try {
-      const created = await api.createSession(selectedTemplate.id, name);
+      const created = await api.createSession(selectedTemplate.id, name, outputType);
       await openSession(
         selectedTemplate,
         { ...created, responses: [] },
@@ -1018,7 +1043,7 @@ export default function App() {
           <strong>Draftwise</strong>
         </button>
         <div className="header-context">
-          {view !== "dashboard" && <><span>{templateName}</span><i /></>}
+          {view !== "dashboard" && <><span>{templateName}{session?.output_type ? ` · ${OUTPUT_TYPE_LABELS[session.output_type]}` : ""}</span><i /></>}
           <span className="local-badge">Local workspace</span>
         </div>
       </header>
@@ -1027,13 +1052,15 @@ export default function App() {
       {namingTemplate && (
         <NameSessionModal
           template={namingTemplate}
-          onConfirm={(name) => startNamed(namingTemplate, name)}
+          defaultOutputType={namingTemplate?.output_type || "report"}
+          onConfirm={(name, outputType) => startNamed(namingTemplate, name, outputType)}
           onCancel={() => setNamingTemplate(null)}
         />
       )}
       {renamingSession && (
         <NameSessionModal
           template={templates.find((t) => t.id === renamingSession.template_id)}
+          nameOnly
           onConfirm={(name) => renameSession(renamingSession, name)}
           onCancel={() => setRenamingSession(null)}
         />

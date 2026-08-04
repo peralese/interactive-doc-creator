@@ -31,6 +31,7 @@ class Session(Base):
     )
     template_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    output_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[SessionStatus] = mapped_column(
         Enum(SessionStatus), nullable=False, default=SessionStatus.ACTIVE
     )

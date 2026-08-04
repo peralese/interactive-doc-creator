@@ -34,6 +34,7 @@ async def load_bundled_templates(db: AsyncSession) -> int:
                 digits = "".join(character for character in duration if character.isdigit())
                 if digits:
                     estimated_duration = int(digits[:2])
+            output_type = metadata.get("output_type") or None
             db.add(
                 Template(
                     id=payload["id"],
@@ -47,6 +48,7 @@ async def load_bundled_templates(db: AsyncSession) -> int:
                     category=metadata.get("category"),
                     estimated_duration=estimated_duration,
                     difficulty=metadata.get("difficulty"),
+                    output_type=output_type,
                 )
             )
             loaded += 1

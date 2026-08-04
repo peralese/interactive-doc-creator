@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from ..models.base import get_db
 from ..models.session import Session
+from ..models.template import Template
 from ..schemas.session import (
     SessionCreate,
     SessionAutosave,
@@ -27,9 +28,11 @@ async def create_session(
     db: AsyncSession = Depends(get_db)
 ):
     """Create a new document session."""
+    template = await db.get(Template, session_data.template_id)
     session = Session(
         template_id=session_data.template_id,
         name=session_data.name,
+        output_type=session_data.output_type or (template.output_type if template else None) or "report",
         session_metadata=session_data.metadata
     )
     db.add(session)
@@ -94,6 +97,7 @@ async def autosave_session(
         session = await SessionManager(db).autosave(
             session_id,
             name=session_data.name,
+            output_type=session_data.output_type,
             metadata=session_data.metadata,
             current_question_index=session_data.current_question_index,
         )

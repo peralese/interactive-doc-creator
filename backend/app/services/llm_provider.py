@@ -193,15 +193,53 @@ class LLMProvider(ABC):
         return list(dict.fromkeys(item.strip() for item in value if item.strip()))[:2]
 
     async def generate_document(
-        self, template: dict[str, Any], responses: list[dict[str, Any]]
+        self,
+        template: dict[str, Any],
+        responses: list[dict[str, Any]],
+        output_type: str = "report",
     ) -> str:
-        prompt = (
-            "Write a polished Markdown document. Follow the template section "
-            "order, use only facts in the responses, and omit unanswered details. "
-            "Return only Markdown.\nTemplate:\n"
-            f"{json.dumps(template)}\nResponses:\n{json.dumps(responses, default=str)}"
-        )
-        return (await self._complete("You are a precise technical writer.", prompt)).strip()
+        template_json = json.dumps(template)
+        responses_json = json.dumps(responses, default=str)
+
+        if output_type == "blog_post":
+            system = (
+                "You are an engaging blogger who writes in first-person voice. "
+                "Your posts are opinionated, narrative, and read like published blog articles."
+            )
+            prompt = (
+                "Write a blog post using the interviewee's own words and experiences from "
+                "the responses below. Use first-person voice throughout ("
+                '"I thought…", "What struck me was…"). '
+                "Favour narrative flow over rigid section headers — use headers sparingly "
+                "and only when they genuinely aid the reader. "
+                "Omit any facts not present in the responses. Return only Markdown.\n"
+                f"Template context:\n{template_json}\nResponses:\n{responses_json}"
+            )
+        elif output_type == "summary":
+            system = (
+                "You are an executive summariser. You produce concise, high-signal summaries "
+                "that respect the reader's time."
+            )
+            prompt = (
+                "Write an executive summary of the responses below. "
+                "Start with 2–4 sentences that capture the core finding or outcome. "
+                "Then list the key details as bullet points. "
+                "The entire summary must be at most 400 words. "
+                "Omit any facts not present in the responses. Return only Markdown.\n"
+                f"Template context:\n{template_json}\nResponses:\n{responses_json}"
+            )
+        else:
+            # "report" is the default; unknown values also fall back here
+            system = "You are a precise technical writer."
+            prompt = (
+                "Write a polished Markdown report. Follow the template section order, "
+                "use formal prose with complete sentences, include a heading for every "
+                "template section that has answers, and omit unanswered details. "
+                "Return only Markdown.\n"
+                f"Template:\n{template_json}\nResponses:\n{responses_json}"
+            )
+
+        return (await self._complete(system, prompt)).strip()
 
     async def analyze_requirements(self, numbered_source: str) -> dict[str, Any]:
         """Convert requirement text into a traceable interview-template draft."""

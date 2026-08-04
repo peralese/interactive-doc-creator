@@ -28,6 +28,7 @@ class TemplateCreate(BaseModel):
     version: str = Field(default="1.0", description="Template version")
     content: dict[str, Any] = Field(..., description="Template content structure")
     category: str | None = Field(None, description="Template category")
+    output_type: str | None = Field(None, description="Default output type")
     estimated_duration: int | None = Field(
         None,
         description="Estimated duration in minutes",
@@ -48,6 +49,7 @@ class TemplateUpdate(BaseModel):
     version: str | None = None
     content: dict[str, Any] | None = None
     category: str | None = None
+    output_type: str | None = None
     estimated_duration: int | None = Field(None, ge=1)
     difficulty: str | None = None
     is_active: bool | None = None
@@ -62,6 +64,7 @@ class TemplateResponse(BaseModel):
     version: str
     content: dict[str, Any]
     category: str | None
+    output_type: str | None
     estimated_duration: int | None
     difficulty: str | None
     is_active: bool

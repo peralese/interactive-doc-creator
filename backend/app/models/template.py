@@ -21,6 +21,7 @@ class Template(Base):
     version: Mapped[str] = mapped_column(String(20), nullable=False, default="1.0")
     content: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    output_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     estimated_duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
     difficulty: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

@@ -36,10 +36,10 @@ export const api = {
       body: JSON.stringify(template),
     }),
   sessions: () => request("/api/sessions/?limit=20"),
-  createSession: (templateId, name) =>
+  createSession: (templateId, name, outputType) =>
     request("/api/sessions/", {
       method: "POST",
-      body: JSON.stringify({ template_id: templateId, name: name || null, metadata: {} }),
+      body: JSON.stringify({ template_id: templateId, name: name || null, output_type: outputType || "report", metadata: {} }),
     }),
   renameSession: (id, name) =>
     request(`/api/sessions/${id}`, {

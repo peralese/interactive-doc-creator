@@ -80,6 +80,7 @@ h1, h2 { font-family: Georgia, serif; font-weight: 400; margin: 0; }
 .status-dot.draft { background: #4c8b72; }
 .session-copy { flex: 1; display: grid; gap: 3px; }.session-copy small { color: var(--muted); }
 .status-pill { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; border: 1px solid var(--line); border-radius: 20px; padding: 5px 8px; color: var(--muted); }
+.output-type-badge { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; border-radius: 20px; padding: 5px 8px; background: var(--mint); color: var(--forest); font-weight: 600; }
 .loading-card, .empty-state { border: 1px dashed #b9b9af; padding: 50px; text-align: center; border-radius: 8px; color: var(--muted); }
 .empty-state h3 { color: var(--ink); margin: 12px 0 5px; }.empty-state p { margin: 0; }
 
@@ -148,6 +149,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .name-session-input { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; font-size: 15px; color: var(--ink); background: #fff; outline: none; }
 .name-session-input:focus { border-color: #79a194; box-shadow: 0 0 0 3px rgba(64,120,102,.1); }
+.output-type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
+.output-type-card { border: 1px solid var(--line); border-radius: 7px; padding: 13px 12px; cursor: pointer; background: var(--paper); text-align: left; transition: border-color .15s, background .15s; }
+.output-type-card:hover { border-color: #79a194; background: #f4f8f5; }
+.output-type-card.selected { border-color: var(--forest); background: var(--mint); }
+.output-type-card strong { display: block; font-size: 14px; color: var(--ink); margin-bottom: 4px; }
+.output-type-card small { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; }
 .ghost-icon-button { border: 0; background: none; cursor: pointer; color: var(--muted); display: grid; place-items: center; padding: 6px; border-radius: 5px; }
 .ghost-icon-button:hover { background: rgba(23,63,55,.08); color: var(--ink); }
 .spinner-label { display: inline-flex; align-items: center; gap: 8px; }.spin { animation: spin .9s linear infinite; }

@@ -74,6 +74,7 @@
   "metadata": {
     "estimated_duration": "15-20 minutes",
     "difficulty": "beginner",
-    "category": "project-management"
+    "category": "project-management",
+    "output_type": "report"
   }
 }
