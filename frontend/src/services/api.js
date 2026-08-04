@@ -36,10 +36,15 @@ export const api = {
       body: JSON.stringify(template),
     }),
   sessions: () => request("/api/sessions/?limit=20"),
-  createSession: (templateId) =>
+  createSession: (templateId, name) =>
     request("/api/sessions/", {
       method: "POST",
-      body: JSON.stringify({ template_id: templateId, metadata: {} }),
+      body: JSON.stringify({ template_id: templateId, name: name || null, metadata: {} }),
+    }),
+  renameSession: (id, name) =>
+    request(`/api/sessions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
     }),
   resumeSession: (id) => request(`/api/sessions/${id}/resume`),
   autosave: (id, data) =>

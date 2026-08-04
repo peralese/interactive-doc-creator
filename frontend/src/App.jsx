@@ -68,7 +68,43 @@ function EmptyState({ title, detail }) {
   );
 }
 
-function Dashboard({ templates, sessions, loading, onStart, onResume, onImport }) {
+function NameSessionModal({ template, onConfirm, onCancel }) {
+  const [name, setName] = useState("");
+  const placeholder = `e.g. "${template?.name} – ${new Date().toLocaleDateString(undefined, { month: "short", year: "numeric" })}"`;
+  return (
+    <div className="modal-backdrop">
+      <div className="modal">
+        <button className="modal-close ghost-icon-button" onClick={onCancel}><X size={18} /></button>
+        <h2>Name this session</h2>
+        <p style={{ color: "var(--muted)", marginTop: 0, marginBottom: 20, fontSize: 14 }}>
+          Give this session a name so you can tell it apart from others using the same template — for example the book title, project name, or date.
+        </p>
+        <input
+          className="name-session-input"
+          type="text"
+          maxLength={200}
+          placeholder={placeholder}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) onConfirm(name.trim()); }}
+          autoFocus
+        />
+        <div className="modal-actions">
+          <button className="secondary-button" onClick={onCancel}>Cancel</button>
+          <button
+            className="primary-button"
+            disabled={!name.trim()}
+            onClick={() => onConfirm(name.trim())}
+          >
+            Start session
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ templates, sessions, loading, onStart, onResume, onImport, onRename }) {
   return (
     <main className="dashboard page-shell">
       <section className="hero">
@@ -140,19 +176,29 @@ function Dashboard({ templates, sessions, loading, onStart, onResume, onImport }
             {sessions.slice(0, 5).map((session) => {
               const template = templates.find((item) => item.id === session.template_id);
               const displayStatus = session.generated_document ? "draft" : session.status;
+              const displayName = session.name || template?.name || session.template_id;
               return (
-                <button key={session.id} className="session-row" onClick={() => onResume(session)}>
-                  <span className={`status-dot ${displayStatus}`} />
-                  <span className="session-copy">
-                    <strong>{template?.name || session.template_id}</strong>
-                    <small>
-                      Updated {formatDate(session.updated_at)} · Question{" "}
-                      {session.current_question_index + 1}
-                    </small>
-                  </span>
-                  <span className="status-pill">{displayStatus}</span>
-                  <ArrowRight size={18} />
-                </button>
+                <div key={session.id} className="session-row-wrap">
+                  <button className="session-row" onClick={() => onResume(session)}>
+                    <span className={`status-dot ${displayStatus}`} />
+                    <span className="session-copy">
+                      <strong>{displayName}</strong>
+                      <small>
+                        {template?.name}{template?.name && session.name ? " · " : ""}Updated {formatDate(session.updated_at)} · Question{" "}
+                        {session.current_question_index + 1}
+                      </small>
+                    </span>
+                    <span className="status-pill">{displayStatus}</span>
+                    <ArrowRight size={18} />
+                  </button>
+                  <button
+                    className="session-rename-btn ghost-icon-button"
+                    title="Rename session"
+                    onClick={(e) => { e.stopPropagation(); onRename(session); }}
+                  >
+                    <Pencil size={14} />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -805,6 +851,8 @@ export default function App() {
   const [ingestion, setIngestion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [namingTemplate, setNamingTemplate] = useState(null); // template pending a name before session create
+  const [renamingSession, setRenamingSession] = useState(null); // session pending a rename
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -845,10 +893,16 @@ export default function App() {
     }
   };
 
-  const start = async (selectedTemplate) => {
+  const start = (selectedTemplate) => {
+    // Show the naming modal; actual session creation happens after the user confirms.
+    setNamingTemplate(selectedTemplate);
+  };
+
+  const startNamed = async (selectedTemplate, name) => {
+    setNamingTemplate(null);
     setLoading(true);
     try {
-      const created = await api.createSession(selectedTemplate.id);
+      const created = await api.createSession(selectedTemplate.id, name);
       await openSession(
         selectedTemplate,
         { ...created, responses: [] },
@@ -941,7 +995,17 @@ export default function App() {
     const saved = await api.createTemplate(draft);
     setTemplates((items) => [...items.filter((item) => item.id !== saved.id), saved]);
     setIngestion(null);
-    await start(saved);
+    start(saved); // Will open the naming modal
+  };
+
+  const renameSession = async (targetSession, name) => {
+    setRenamingSession(null);
+    try {
+      const updated = await api.renameSession(targetSession.id, name);
+      setSessions((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (error) {
+      setMessage(error.message);
+    }
   };
 
   const templateName = useMemo(() => template?.name || "Draftwise", [template]);
@@ -960,6 +1024,20 @@ export default function App() {
       </header>
 
       {message && <div className="global-error"><span>{message}</span><button onClick={() => setMessage("")}><X size={16} /></button></div>}
+      {namingTemplate && (
+        <NameSessionModal
+          template={namingTemplate}
+          onConfirm={(name) => startNamed(namingTemplate, name)}
+          onCancel={() => setNamingTemplate(null)}
+        />
+      )}
+      {renamingSession && (
+        <NameSessionModal
+          template={templates.find((t) => t.id === renamingSession.template_id)}
+          onConfirm={(name) => renameSession(renamingSession, name)}
+          onCancel={() => setRenamingSession(null)}
+        />
+      )}
       {view === "dashboard" && (
         <Dashboard
           templates={templates}
@@ -968,6 +1046,7 @@ export default function App() {
           onStart={start}
           onResume={resume}
           onImport={() => setView("import-requirements")}
+          onRename={(s) => setRenamingSession(s)}
         />
       )}
       {view === "import-requirements" && (

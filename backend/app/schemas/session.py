@@ -18,6 +18,7 @@ class SessionCreate(BaseModel):
     """Schema for creating a new session."""
     
     template_id: str = Field(..., description="Template identifier")
+    name: str | None = Field(None, max_length=200, description="Optional human-readable session name")
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional session metadata"
@@ -28,6 +29,7 @@ class SessionUpdate(BaseModel):
     """Schema for updating a session."""
     
     status: SessionStatus | None = None
+    name: str | None = Field(None, max_length=200)
     metadata: dict[str, Any] | None = None
     current_question_index: int | None = Field(None, ge=0)
     generated_document: str | None = None
@@ -36,6 +38,7 @@ class SessionUpdate(BaseModel):
 class SessionAutosave(BaseModel):
     """Small, idempotent progress payload used by interactive clients."""
 
+    name: str | None = Field(None, max_length=200)
     metadata: dict[str, Any] | None = None
     current_question_index: int | None = Field(None, ge=0)
 
@@ -45,6 +48,7 @@ class SessionResponse(BaseModel):
     
     id: UUID
     template_id: str
+    name: str | None
     status: SessionStatus
     metadata: dict[str, Any] = Field(validation_alias="session_metadata")
     current_question_index: int

@@ -32,10 +32,13 @@ class SessionManager:
         self,
         session_id: UUID,
         *,
+        name: str | None = None,
         metadata: dict[str, Any] | None = None,
         current_question_index: int | None = None,
     ) -> Session:
         session = await self.get(session_id)
+        if name is not None:
+            session.name = name
         if metadata is not None:
             session.session_metadata = metadata
         if current_question_index is not None:

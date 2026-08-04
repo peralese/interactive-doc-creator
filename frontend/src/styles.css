@@ -68,6 +68,12 @@ h1, h2 { font-family: Georgia, serif; font-weight: 400; margin: 0; }
 .import-button { min-height: 38px; font-size: 12px; }
 .recent { padding-bottom: 70px; }
 .session-list { background: rgba(255,253,248,.55); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.session-row-wrap { display: flex; align-items: center; border-bottom: 1px solid var(--line); }
+.session-row-wrap:last-child { border-bottom: 0; }
+.session-row-wrap:hover { background: var(--paper); }
+.session-row-wrap .session-row { flex: 1; border: 0; border-bottom: 0; }
+.session-row-wrap .session-row:hover { background: none; }
+.session-row-wrap .session-rename-btn { flex: 0 0 auto; margin-right: 10px; }
 .session-row { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 17px 20px; display: flex; align-items: center; gap: 14px; text-align: left; cursor: pointer; }
 .session-row:last-child { border: 0; }.session-row:hover { background: var(--paper); }
 .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #d39b49; }.status-dot.completed { background: #4c8b72; }
@@ -139,6 +145,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .modal { width: min(620px, 100%); background: var(--paper); border-radius: 9px; padding: 35px; box-shadow: 0 30px 80px rgba(15,35,29,.25); position: relative; }
 .modal h2 { font: 600 20px "Avenir Next", "Segoe UI", sans-serif; margin: 12px 45px 20px 0; }.modal textarea { width: 100%; min-height: 180px; padding: 16px; border: 1px solid var(--line); border-radius: 6px; resize: vertical; margin-bottom: 15px; }
 .modal-close { position: absolute; right: 20px; top: 20px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.name-session-input { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; font-size: 15px; color: var(--ink); background: #fff; outline: none; }
+.name-session-input:focus { border-color: #79a194; box-shadow: 0 0 0 3px rgba(64,120,102,.1); }
+.ghost-icon-button { border: 0; background: none; cursor: pointer; color: var(--muted); display: grid; place-items: center; padding: 6px; border-radius: 5px; }
+.ghost-icon-button:hover { background: rgba(23,63,55,.08); color: var(--ink); }
 .spinner-label { display: inline-flex; align-items: center; gap: 8px; }.spin { animation: spin .9s linear infinite; }
 
 .import-page, .review-page { padding-top: 48px; padding-bottom: 90px; }

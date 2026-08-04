@@ -29,6 +29,7 @@ async def create_session(
     """Create a new document session."""
     session = Session(
         template_id=session_data.template_id,
+        name=session_data.name,
         session_metadata=session_data.metadata
     )
     db.add(session)
@@ -92,6 +93,7 @@ async def autosave_session(
     try:
         session = await SessionManager(db).autosave(
             session_id,
+            name=session_data.name,
             metadata=session_data.metadata,
             current_question_index=session_data.current_question_index,
         )
