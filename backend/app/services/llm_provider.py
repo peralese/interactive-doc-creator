@@ -117,20 +117,93 @@ class LLMProviderError(RuntimeError):
 
 
 def _json_from_text(text: str) -> Any:
-    """Extract JSON from a plain or fenced model response."""
+    """Extract JSON from a plain or fenced model response.
+
+    Handles:
+    - Fenced responses (```json ... ``` or ``` ... ```)
+    - Responses with preamble/postamble text
+    - Truncated responses missing a closing brace (local model token limits)
+    """
+    # Strip code fences (``` or ```json)
     cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE)
+
+    # First attempt: direct parse
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        start_candidates = [i for i in (cleaned.find("["), cleaned.find("{")) if i >= 0]
-        if not start_candidates:
-            raise LLMProviderError("The LLM returned invalid JSON")
-        start = min(start_candidates)
-        end = max(cleaned.rfind("]"), cleaned.rfind("}"))
+        pass
+
+    # Second attempt: extract from first { or [ to last } or ]
+    start_candidates = [i for i in (cleaned.find("["), cleaned.find("{")) if i >= 0]
+    if not start_candidates:
+        raise LLMProviderError("The LLM returned invalid JSON")
+    start = min(start_candidates)
+    end = max(cleaned.rfind("]"), cleaned.rfind("}"))
+    if end > start:
         try:
             return json.loads(cleaned[start : end + 1])
-        except (json.JSONDecodeError, ValueError) as exc:
-            raise LLMProviderError("The LLM returned invalid JSON") from exc
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Third attempt: repair a truncated JSON object by closing open strings and braces
+    fragment = cleaned[start:] if start_candidates else cleaned
+    try:
+        repaired = _repair_truncated_json(fragment)
+        return json.loads(repaired)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise LLMProviderError("The LLM returned invalid JSON") from exc
+
+
+def _repair_truncated_json(fragment: str) -> str:
+    """Best-effort repair of a JSON object truncated mid-stream by a token limit.
+
+    - Escapes any literal newlines/tabs inside string values
+    - Closes any open string
+    - Appends missing closing braces/brackets
+    Only intended for simple flat objects like the polish response.
+    """
+    # First pass: escape literal control characters inside string values
+    cleaned_chars: list[str] = []
+    in_str = False
+    i = 0
+    while i < len(fragment):
+        ch = fragment[i]
+        if ch == "\\" and in_str:
+            # Pass through escape sequence intact
+            cleaned_chars.append(ch)
+            if i + 1 < len(fragment):
+                cleaned_chars.append(fragment[i + 1])
+                i += 2
+            else:
+                i += 1
+            continue
+        if ch == '"':
+            in_str = not in_str
+            cleaned_chars.append(ch)
+        elif in_str and ch == "\n":
+            cleaned_chars.append("\\n")
+        elif in_str and ch == "\r":
+            cleaned_chars.append("\\r")
+        elif in_str and ch == "\t":
+            cleaned_chars.append("\\t")
+        else:
+            cleaned_chars.append(ch)
+        i += 1
+
+    result = "".join(cleaned_chars).rstrip()
+
+    # If we ended mid-string, close it
+    if in_str:
+        result += '"'
+
+    # Count open braces/brackets that need closing
+    depth_brace = result.count("{") - result.count("}")
+    depth_bracket = result.count("[") - result.count("]")
+
+    result += "]" * max(0, depth_bracket)
+    result += "}" * max(0, depth_brace)
+
+    return result
 
 
 class LLMProvider(ABC):
@@ -360,13 +433,17 @@ class AnthropicProvider(LLMProvider):
 class OllamaProvider(LLMProvider):
     async def _complete(self, system: str, prompt: str) -> str:
         try:
-            async with httpx.AsyncClient(base_url=settings.ollama_base_url, timeout=90) as client:
+            async with httpx.AsyncClient(base_url=settings.ollama_base_url, timeout=120) as client:
                 response = await client.post(
                     "/api/chat",
                     json={
                         "model": settings.ollama_model,
                         "stream": False,
-                        "options": {"temperature": settings.ollama_temperature},
+                        "options": {
+                            "temperature": settings.ollama_temperature,
+                            # Ensure long JSON responses are never truncated
+                            "num_predict": 2048,
+                        },
                         "messages": [
                             {"role": "system", "content": system},
                             {"role": "user", "content": prompt},

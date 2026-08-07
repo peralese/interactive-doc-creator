@@ -67,7 +67,7 @@ async def init_db() -> None:
     )
 
     # Import models so their tables are registered on Base.metadata
-    from . import response, session, template  # noqa: F401
+    from . import capture, response, session, template  # noqa: F401
 
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

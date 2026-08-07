@@ -21,6 +21,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAudioRecorder } from "./hooks/useAudioRecorder";
 import { api } from "./services/api";
+import { QuickCapture } from "./components/QuickCapture";
 
 const OUTPUT_TYPE_LABELS = { report: "Report", blog_post: "Blog Post", summary: "Summary" };
 
@@ -128,7 +129,7 @@ function NameSessionModal({ template, onConfirm, onCancel, defaultOutputType, na
   );
 }
 
-function Dashboard({ templates, sessions, loading, onStart, onResume, onImport, onRename }) {
+function Dashboard({ templates, sessions, loading, onStart, onResume, onImport, onRename, onCapture }) {
   return (
     <main className="dashboard page-shell">
       <section className="hero">
@@ -151,9 +152,14 @@ function Dashboard({ templates, sessions, loading, onStart, onResume, onImport, 
             <span className="kicker">Start something new</span>
             <h2>Choose a document</h2>
           </div>
-          <button className="secondary-button import-button" onClick={onImport}>
-            <Upload size={16} /> Import requirements
-          </button>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="secondary-button import-button" onClick={onCapture}>
+              <Mic size={16} /> Quick Capture
+            </button>
+            <button className="secondary-button import-button" onClick={onImport}>
+              <Upload size={16} /> Import requirements
+            </button>
+          </div>
         </div>
         {loading ? (
           <div className="loading-card"><Spinner label="Loading templates…" /></div>
@@ -864,8 +870,11 @@ function MarkdownDocument({ content }) {
   );
 }
 
+const isCapturePath = window.location.pathname === "/capture";
+
 export default function App() {
-  const [view, setView] = useState("dashboard");
+  const [view, setView] = useState(isCapturePath ? "capture" : "dashboard");
+  const [standaloneCapture] = useState(isCapturePath);
   const [templates, setTemplates] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [template, setTemplate] = useState(null);
@@ -1074,6 +1083,13 @@ export default function App() {
           onResume={resume}
           onImport={() => setView("import-requirements")}
           onRename={(s) => setRenamingSession(s)}
+          onCapture={() => setView("capture")}
+        />
+      )}
+      {view === "capture" && (
+        <QuickCapture
+          standalone={standaloneCapture}
+          onBack={() => { setView("dashboard"); loadDashboard(); }}
         />
       )}
       {view === "import-requirements" && (
@@ -1136,10 +1152,12 @@ export default function App() {
           }}
         />
       )}
-      <footer>
-        <span><LayoutDashboard size={14} /> Private by default</span>
-        <span><Clock3 size={14} /> Progress saves automatically</span>
-      </footer>
+      {!standaloneCapture && (
+        <footer>
+          <span><LayoutDashboard size={14} /> Private by default</span>
+          <span><Clock3 size={14} /> Progress saves automatically</span>
+        </footer>
+      )}
     </div>
   );
 }

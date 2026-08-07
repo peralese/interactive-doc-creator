@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import documents, questions, responses, sessions, templates, transcriptions
+from .api import captures, documents, questions, responses, sessions, templates, transcriptions
 from .config import settings
 from .models.base import AsyncSessionLocal, close_db, init_db
 from .services.template_loader import load_bundled_templates
@@ -89,6 +89,7 @@ app.include_router(
     prefix="/api/transcriptions",
     tags=["Transcriptions"],
 )
+app.include_router(captures.router, prefix="/api/captures", tags=["Captures"])
 
 
 # Root endpoint
