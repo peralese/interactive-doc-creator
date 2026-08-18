@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     
     # LLM Configuration
     llm_default_provider: Literal["openai", "anthropic", "ollama"] = "openai"
+
+    # Quick Capture LLM — defaults to ollama so captured ideas never leave the machine
+    capture_llm_provider: Literal["openai", "ollama"] = "ollama"
     
     # OpenAI
     openai_api_key: str = ""

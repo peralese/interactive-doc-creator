@@ -9,5 +9,7 @@ export default defineConfig({
       "/api": "http://localhost:8000",
       "/health": "http://localhost:8000",
     },
+    // Serve index.html for all non-asset paths so /capture works as a direct URL
+    historyApiFallback: true,
   },
 });

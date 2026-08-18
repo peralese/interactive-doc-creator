@@ -72,7 +72,7 @@ export const api = {
   transcribe: (blob, sessionId) => {
     const form = new FormData();
     form.append("audio", blob, `answer-${Date.now()}.webm`);
-    form.append("session_id", sessionId);
+    if (sessionId) form.append("session_id", sessionId);
     return request("/api/transcriptions/", { method: "POST", body: form });
   },
   preview: (sessionId) => request(`/api/documents/preview/${sessionId}`),
@@ -83,4 +83,17 @@ export const api = {
     }),
   downloadUrl: (sessionId, format) =>
     `${API_BASE}/api/documents/download/${sessionId}?format=${format}`,
+  polishCapture: (rawText, provider = "ollama") =>
+    request("/api/captures/polish", {
+      method: "POST",
+      body: JSON.stringify({ raw_text: rawText, provider }),
+    }),
+  saveCapture: (capture) =>
+    request("/api/captures/", {
+      method: "POST",
+      body: JSON.stringify(capture),
+    }),
+  listCaptures: () => request("/api/captures/"),
+  deleteCapture: (id) =>
+    request(`/api/captures/${id}`, { method: "DELETE" }),
 };
