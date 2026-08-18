@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import uuid as _uuid_module
 
-from sqlalchemy import String
+from sqlalchemy import String, inspect, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -71,6 +72,27 @@ async def init_db() -> None:
 
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_add_missing_columns)
+
+
+def _add_missing_columns(sync_conn: Connection) -> None:
+    """Add columns declared on the ORM models but absent from the actual
+    tables (e.g. a table that existed before a new nullable column was added
+    to its model). ``create_all`` only creates missing tables, so this covers
+    the case it doesn't."""
+    inspector = inspect(sync_conn)
+    existing_tables = set(inspector.get_table_names())
+    for table in Base.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue
+        existing_columns = {col["name"] for col in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in existing_columns:
+                continue
+            coltype = column.type.compile(dialect=sync_conn.dialect)
+            sync_conn.execute(
+                text(f"ALTER TABLE {table.name} ADD COLUMN {column.name} {coltype}")
+            )
 
 
 async def close_db() -> None:
