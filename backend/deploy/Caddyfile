@@ -1,0 +1,14 @@
+# Reverse proxy that terminates HTTPS for the LAN so browser mic access
+# (getUserMedia) works from other devices, not just localhost.
+#
+# The certificate is generated locally with mkcert — see backend/deploy/certs/
+# (gitignored; regenerate per machine with:
+#   mkcert RDaneel.local 192.168.68.51 192.168.68.62 localhost 127.0.0.1
+# from that directory). Each client device must trust the mkcert root CA
+# (~/Library/Application Support/mkcert/rootCA.pem on this Mac) once — see
+# HANDOFF.md for the distribution steps.
+
+https://RDaneel.local, https://192.168.68.51, https://192.168.68.62 {
+	tls /Users/erickperales/Projects/interactive-doc-creator/backend/deploy/certs/RDaneel.local+4.pem /Users/erickperales/Projects/interactive-doc-creator/backend/deploy/certs/RDaneel.local+4-key.pem
+	reverse_proxy 127.0.0.1:8000
+}

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.peralese.interactive-doc-creator-caddy</string>
+
+    <!-- No UserName key: must run as root to bind port 443. -->
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/caddy</string>
+        <string>run</string>
+        <string>--config</string>
+        <string>/Users/erickperales/Projects/interactive-doc-creator/backend/deploy/Caddyfile</string>
+        <string>--adapter</string>
+        <string>caddyfile</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>/opt/homebrew/var/lib</string>
+        <key>XDG_DATA_HOME</key>
+        <string>/opt/homebrew/var/lib</string>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/erickperales/Projects/interactive-doc-creator/backend/deploy</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/erickperales/Projects/interactive-doc-creator/backend/logs/caddy.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/erickperales/Projects/interactive-doc-creator/backend/logs/caddy.err.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
