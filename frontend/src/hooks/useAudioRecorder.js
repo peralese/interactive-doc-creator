@@ -24,6 +24,7 @@ export function useAudioRecorder(onRecording) {
   const streamRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
+  const wakeLockRef = useRef(null);
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
 
@@ -32,10 +33,17 @@ export function useAudioRecorder(onRecording) {
     streamRef.current = null;
   };
 
+  const releaseWakeLock = () => {
+    const lock = wakeLockRef.current;
+    wakeLockRef.current = null;
+    lock?.release().catch(() => {});
+  };
+
   useEffect(() => () => {
     clearInterval(timerRef.current);
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     stopTracks();
+    releaseWakeLock();
   }, []);
 
   const start = async () => {
@@ -63,14 +71,24 @@ export function useAudioRecorder(onRecording) {
         const blob = new Blob(chunksRef.current, {
           type: recorder.mimeType || "audio/webm",
         });
-        if (blob.size) onRecording(blob);
+        // Hold the wake lock through transcription too, not just recording —
+        // a long answer can take a while to transcribe, and a screen that
+        // locks mid-wait kills the in-flight request on iOS Safari.
+        Promise.resolve(blob.size ? onRecording(blob) : null).finally(releaseWakeLock);
       };
       recorder.start(500);
       setSeconds(0);
       setRecording(true);
       timerRef.current = setInterval(() => setSeconds((value) => value + 1), 1000);
+      try {
+        wakeLockRef.current = (await navigator.wakeLock?.request("screen")) || null;
+      } catch {
+        // Wake Lock isn't supported or was denied — recording still works,
+        // it's just more exposed to the screen locking mid-transcription.
+      }
     } catch (error) {
       stopTracks();
+      releaseWakeLock();
       throw microphoneError(error);
     }
   };

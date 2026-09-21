@@ -1,5 +1,23 @@
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
+// MediaRecorder's actual output container varies by browser — Safari (iOS/macOS)
+// never produces WebM, it records MP4/AAC. Naming the upload from the blob's real
+// mimeType (rather than hardcoding .webm) keeps the stored file's extension honest.
+const EXTENSION_BY_MIME_SUBTYPE = {
+  webm: "webm",
+  mp4: "mp4",
+  ogg: "ogg",
+  wav: "wav",
+  aac: "aac",
+  "x-m4a": "m4a",
+  mpeg: "mp3",
+};
+
+function audioFileExtension(mimeType) {
+  const subtype = (mimeType || "").split(";")[0].split("/")[1];
+  return EXTENSION_BY_MIME_SUBTYPE[subtype] || "webm";
+}
+
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -35,7 +53,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(template),
     }),
-  sessions: () => request("/api/sessions/?limit=20"),
+  sessions: (limit = 20) => request(`/api/sessions/?limit=${limit}`),
   createSession: (templateId, name, outputType) =>
     request("/api/sessions/", {
       method: "POST",
@@ -71,7 +89,7 @@ export const api = {
     }),
   transcribe: (blob, sessionId) => {
     const form = new FormData();
-    form.append("audio", blob, `answer-${Date.now()}.webm`);
+    form.append("audio", blob, `answer-${Date.now()}.${audioFileExtension(blob.type)}`);
     if (sessionId) form.append("session_id", sessionId);
     return request("/api/transcriptions/", { method: "POST", body: form });
   },
@@ -93,7 +111,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(capture),
     }),
-  listCaptures: () => request("/api/captures/"),
+  listCaptures: (limit = 100) => request(`/api/captures/?limit=${limit}`),
   deleteCapture: (id) =>
     request(`/api/captures/${id}`, { method: "DELETE" }),
 };

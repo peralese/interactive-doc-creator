@@ -122,6 +122,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .error-banner, .global-error { color: #8b3928; background: #f8ddd5; border: 1px solid #edb4a5; border-radius: 6px; padding: 10px 13px; font-size: 13px; margin-top: 12px; }
 .global-error { position: fixed; top: 88px; right: 24px; z-index: 50; box-shadow: var(--shadow); display: flex; gap: 15px; align-items: center; }
 .global-error button { background: none; border: 0; cursor: pointer; color: inherit; }
+.error-banner { display: flex; flex-wrap: wrap; gap: 5px 14px; align-items: center; }
+.error-banner .text-button { color: inherit; text-decoration: underline; }
 
 .complete-screen { min-height: calc(100vh - 126px); display: grid; place-items: center; }
 .complete-card { max-width: 620px; text-align: center; }

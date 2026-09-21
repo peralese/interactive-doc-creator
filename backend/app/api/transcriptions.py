@@ -92,7 +92,13 @@ async def transcribe_audio(
     except Exception as exc:
         destination.unlink(missing_ok=True)
         logger.exception("Audio transcription failed")
-        raise HTTPException(status_code=422, detail=f"Unable to transcribe audio: {exc}") from exc
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "That recording couldn't be processed — it may have been cut short "
+                "or interrupted. Please try recording your answer again."
+            ),
+        ) from exc
     return TranscriptionResponse(
         **result,
         audio_path=str(destination),

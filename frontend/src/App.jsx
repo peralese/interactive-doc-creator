@@ -129,7 +129,102 @@ function NameSessionModal({ template, onConfirm, onCancel, defaultOutputType, na
   );
 }
 
-function Dashboard({ templates, sessions, loading, onStart, onResume, onImport, onRename, onCapture }) {
+function ActivityRow({ item, templates, onResume, onRename, onOpenCapture, onDeleteCapture }) {
+  if (item.type === "session") {
+    const session = item.data;
+    const template = templates.find((t) => t.id === session.template_id);
+    const displayStatus = session.generated_document ? "draft" : session.status;
+    const displayName = session.name || template?.name || session.template_id;
+    return (
+      <div className="session-row-wrap">
+        <button className="session-row" onClick={() => onResume(session)}>
+          <span className={`status-dot ${displayStatus}`} />
+          <span className="session-copy">
+            <strong>{displayName}</strong>
+            <small>
+              {template?.name}{template?.name && session.name ? " · " : ""}Updated {formatDate(session.updated_at)} · Question{" "}
+              {session.current_question_index + 1}
+            </small>
+          </span>
+          <span className="output-type-badge">{OUTPUT_TYPE_LABELS[session.output_type] || "Report"}</span>
+          <span className="status-pill">{displayStatus}</span>
+          <ArrowRight size={18} />
+        </button>
+        <button
+          className="session-rename-btn ghost-icon-button"
+          title="Rename session"
+          onClick={(e) => { e.stopPropagation(); onRename(session); }}
+        >
+          <Pencil size={14} />
+        </button>
+      </div>
+    );
+  }
+
+  const capture = item.data;
+  return (
+    <div className="session-row-wrap">
+      <button className="session-row" onClick={onOpenCapture}>
+        <span className="status-dot completed" />
+        <span className="session-copy">
+          <strong>{capture.name}</strong>
+          <small>
+            Quick Capture · {formatDate(capture.created_at)}
+            {capture.llm_provider && ` · ${capture.llm_provider === "ollama" ? "Local" : "OpenAI"}`}
+          </small>
+        </span>
+        <span className="output-type-badge">Capture</span>
+        <ArrowRight size={18} />
+      </button>
+      {onDeleteCapture && (
+        <button
+          className="session-rename-btn ghost-icon-button"
+          title="Delete capture"
+          onClick={(e) => { e.stopPropagation(); onDeleteCapture(capture); }}
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function AllActivity({ items, templates, onResume, onRename, onOpenCapture, onDeleteCapture, onBack }) {
+  return (
+    <main className="dashboard page-shell">
+      <section className="section-block recent">
+        <div className="section-heading">
+          <div>
+            <span className="kicker">Everything you’ve created</span>
+            <h2>All activity</h2>
+          </div>
+          <button className="secondary-button" onClick={onBack}>
+            <ArrowLeft size={16} /> Dashboard
+          </button>
+        </div>
+        {items.length ? (
+          <div className="session-list">
+            {items.map((item) => (
+              <ActivityRow
+                key={`${item.type}-${item.id}`}
+                item={item}
+                templates={templates}
+                onResume={onResume}
+                onRename={onRename}
+                onOpenCapture={onOpenCapture}
+                onDeleteCapture={onDeleteCapture}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="Nothing here yet" detail="Start a document or capture an idea to see it here." />
+        )}
+      </section>
+    </main>
+  );
+}
+
+function Dashboard({ templates, recentItems, loading, onStart, onResume, onImport, onRename, onCapture, onViewAll }) {
   return (
     <main className="dashboard page-shell">
       <section className="hero">
@@ -198,43 +293,29 @@ function Dashboard({ templates, sessions, loading, onStart, onResume, onImport, 
         <div className="section-heading">
           <div>
             <span className="kicker">Pick up where you left off</span>
-            <h2>Recent sessions</h2>
+            <h2>Recent activity</h2>
           </div>
+          {recentItems.length > 5 && (
+            <button className="text-button" onClick={onViewAll}>
+              View all <ChevronRight size={15} />
+            </button>
+          )}
         </div>
-        {sessions.length ? (
+        {recentItems.length ? (
           <div className="session-list">
-            {sessions.slice(0, 5).map((session) => {
-              const template = templates.find((item) => item.id === session.template_id);
-              const displayStatus = session.generated_document ? "draft" : session.status;
-              const displayName = session.name || template?.name || session.template_id;
-              return (
-                <div key={session.id} className="session-row-wrap">
-                  <button className="session-row" onClick={() => onResume(session)}>
-                    <span className={`status-dot ${displayStatus}`} />
-                    <span className="session-copy">
-                      <strong>{displayName}</strong>
-                      <small>
-                        {template?.name}{template?.name && session.name ? " · " : ""}Updated {formatDate(session.updated_at)} · Question{" "}
-                        {session.current_question_index + 1}
-                      </small>
-                    </span>
-                    <span className="output-type-badge">{OUTPUT_TYPE_LABELS[session.output_type] || "Report"}</span>
-                    <span className="status-pill">{displayStatus}</span>
-                    <ArrowRight size={18} />
-                  </button>
-                  <button
-                    className="session-rename-btn ghost-icon-button"
-                    title="Rename session"
-                    onClick={(e) => { e.stopPropagation(); onRename(session); }}
-                  >
-                    <Pencil size={14} />
-                  </button>
-                </div>
-              );
-            })}
+            {recentItems.slice(0, 5).map((item) => (
+              <ActivityRow
+                key={`${item.type}-${item.id}`}
+                item={item}
+                templates={templates}
+                onResume={onResume}
+                onRename={onRename}
+                onOpenCapture={onCapture}
+              />
+            ))}
           </div>
         ) : (
-          <p className="quiet">Your saved sessions will appear here.</p>
+          <p className="quiet">Your saved sessions and captures will appear here.</p>
         )}
       </section>
     </main>
@@ -672,6 +753,7 @@ function Interview({
   const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState("");
   const [editing, setEditing] = useState(null);
+  const [pendingBlob, setPendingBlob] = useState(null);
   const current = questions[index];
   const progress = questions.length ? Math.min(100, (responses.length / questions.length) * 100) : 0;
 
@@ -682,7 +764,11 @@ function Interview({
       try {
         const result = await api.transcribe(blob, session.id);
         setAnswer((value) => `${value}${value ? " " : ""}${result.text}`.trim());
+        setPendingBlob(null);
       } catch (caught) {
+        // Keep the recorded audio so a failed upload (e.g. a dropped
+        // connection during a long transcription) doesn't force re-recording.
+        setPendingBlob(blob);
         setError(caught.message);
       } finally {
         setTranscribing(false);
@@ -788,7 +874,20 @@ function Interview({
               )}
             </div>
           </div>
-          {error && <div className="error-banner">{error}</div>}
+          {error && (
+            <div className="error-banner">
+              {error}
+              {pendingBlob && (
+                <button
+                  className="text-button"
+                  onClick={() => handleRecording(pendingBlob)}
+                  disabled={transcribing}
+                >
+                  Retry transcription
+                </button>
+              )}
+            </div>
+          )}
           <div className="question-actions">
             <button
               className="secondary-button"
@@ -877,6 +976,7 @@ export default function App() {
   const [standaloneCapture] = useState(isCapturePath);
   const [templates, setTemplates] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [captures, setCaptures] = useState([]);
   const [template, setTemplate] = useState(null);
   const [session, setSession] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -892,9 +992,14 @@ export default function App() {
     setLoading(true);
     setMessage("");
     try {
-      const [templateData, sessionData] = await Promise.all([api.templates(), api.sessions()]);
+      const [templateData, sessionData, captureData] = await Promise.all([
+        api.templates(),
+        api.sessions(100),
+        api.listCaptures(100),
+      ]);
       setTemplates(templateData.templates);
       setSessions(sessionData.sessions);
+      setCaptures(captureData.captures);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -903,6 +1008,26 @@ export default function App() {
   }, []);
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
+
+  // Sessions and Quick Captures are separate entities but share one "recent
+  // activity" timeline on the dashboard, sorted by most recent activity.
+  const recentItems = useMemo(() => {
+    const sessionItems = sessions.map((item) => ({
+      type: "session",
+      id: item.id,
+      timestamp: item.updated_at,
+      data: item,
+    }));
+    const captureItems = captures.map((item) => ({
+      type: "capture",
+      id: item.id,
+      timestamp: item.updated_at || item.created_at,
+      data: item,
+    }));
+    return [...sessionItems, ...captureItems].sort(
+      (a, b) => new Date(b.timestamp) - new Date(a.timestamp),
+    );
+  }, [sessions, captures]);
 
   const openSession = async (
     selectedTemplate,
@@ -1042,6 +1167,15 @@ export default function App() {
     }
   };
 
+  const deleteCapture = async (capture) => {
+    try {
+      await api.deleteCapture(capture.id);
+      setCaptures((items) => items.filter((item) => item.id !== capture.id));
+    } catch (error) {
+      setMessage(error.message);
+    }
+  };
+
   const templateName = useMemo(() => template?.name || "Draftwise", [template]);
 
   return (
@@ -1077,13 +1211,25 @@ export default function App() {
       {view === "dashboard" && (
         <Dashboard
           templates={templates}
-          sessions={sessions}
+          recentItems={recentItems}
           loading={loading}
           onStart={start}
           onResume={resume}
           onImport={() => setView("import-requirements")}
           onRename={(s) => setRenamingSession(s)}
           onCapture={() => setView("capture")}
+          onViewAll={() => setView("all-activity")}
+        />
+      )}
+      {view === "all-activity" && (
+        <AllActivity
+          items={recentItems}
+          templates={templates}
+          onResume={resume}
+          onRename={(s) => setRenamingSession(s)}
+          onOpenCapture={() => setView("capture")}
+          onDeleteCapture={deleteCapture}
+          onBack={() => setView("dashboard")}
         />
       )}
       {view === "capture" && (
