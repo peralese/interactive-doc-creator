@@ -36,14 +36,19 @@ function ProviderToggle({ provider, onChange }) {
   );
 }
 
-export function QuickCapture({ standalone, onBack }) {
-  const [provider, setProvider] = useState("ollama");
-  const [phase, setPhase] = useState("idle"); // idle | transcribing | transcribed | polishing | polished | saving | saved
-  const [rawText, setRawText] = useState("");
-  const [cleanProse, setCleanProse] = useState("");
-  const [structuredBreakdown, setStructuredBreakdown] = useState("");
+export function QuickCapture({ standalone, initialCapture, onBack }) {
+  const [provider, setProvider] = useState(initialCapture?.llm_provider || "ollama");
+  // idle | transcribing | transcribed | polishing | polished | saving | saved
+  const [phase, setPhase] = useState(() => {
+    if (!initialCapture) return "idle";
+    return initialCapture.clean_prose || initialCapture.structured_breakdown ? "polished" : "transcribed";
+  });
+  const [rawText, setRawText] = useState(initialCapture?.raw_transcription || "");
+  const [cleanProse, setCleanProse] = useState(initialCapture?.clean_prose || "");
+  const [structuredBreakdown, setStructuredBreakdown] = useState(initialCapture?.structured_breakdown || "");
   const [selectedOutput, setSelectedOutput] = useState("prose"); // "prose" | "structured"
-  const [captureName, setCaptureName] = useState("");
+  const [captureName, setCaptureName] = useState(initialCapture?.name || "");
+  const [editingId, setEditingId] = useState(initialCapture?.id || null);
   const [error, setError] = useState("");
   const [savedCaptures, setSavedCaptures] = useState([]);
   const [loadingCaptures, setLoadingCaptures] = useState(true);
@@ -96,21 +101,20 @@ export function QuickCapture({ standalone, onBack }) {
     if (!captureName.trim()) return;
     setPhase("saving");
     setError("");
-    const textToSave =
-      phase === "polished"
-        ? selectedOutput === "prose"
-          ? cleanProse
-          : structuredBreakdown
-        : rawText;
+
+    const payload = {
+      name: captureName.trim(),
+      raw_transcription: rawText,
+      clean_prose: cleanProse || null,
+      structured_breakdown: structuredBreakdown || null,
+      llm_provider: cleanProse ? provider : null,
+    };
 
     try {
-      await api.saveCapture({
-        name: captureName.trim(),
-        raw_transcription: rawText,
-        clean_prose: cleanProse || null,
-        structured_breakdown: structuredBreakdown || null,
-        llm_provider: cleanProse ? provider : null,
-      });
+      const saved = editingId
+        ? await api.updateCapture(editingId, payload)
+        : await api.saveCapture(payload);
+      setEditingId(saved.id);
       setPhase("saved");
       await loadCaptures();
     } catch {
@@ -126,13 +130,27 @@ export function QuickCapture({ standalone, onBack }) {
     setStructuredBreakdown("");
     setCaptureName("");
     setSelectedOutput("prose");
+    setEditingId(null);
     setError("");
+  };
+
+  const openCapture = (capture) => {
+    setEditingId(capture.id);
+    setCaptureName(capture.name);
+    setRawText(capture.raw_transcription || "");
+    setCleanProse(capture.clean_prose || "");
+    setStructuredBreakdown(capture.structured_breakdown || "");
+    setProvider(capture.llm_provider || "ollama");
+    setSelectedOutput("prose");
+    setError("");
+    setPhase(capture.clean_prose || capture.structured_breakdown ? "polished" : "transcribed");
   };
 
   const handleDelete = async (id) => {
     try {
       await api.deleteCapture(id);
       setSavedCaptures((prev) => prev.filter((c) => c.id !== id));
+      if (editingId === id) handleCaptureAnother();
     } catch {
       setError("Could not delete capture. Please try again.");
     }
@@ -333,7 +351,12 @@ export function QuickCapture({ standalone, onBack }) {
             <div className="session-list">
               {savedCaptures.map((capture) => (
                 <div key={capture.id} className="session-row-wrap">
-                  <div className="session-row" style={{ cursor: "default" }}>
+                  <button
+                    className="session-row"
+                    disabled={isWorking}
+                    onClick={() => openCapture(capture)}
+                    style={editingId === capture.id ? { borderColor: "var(--forest)" } : undefined}
+                  >
                     <span className="status-dot completed" />
                     <span className="session-copy">
                       <strong>{capture.name}</strong>
@@ -346,7 +369,7 @@ export function QuickCapture({ standalone, onBack }) {
                         )}
                       </small>
                     </span>
-                  </div>
+                  </button>
                   <button
                     className="ghost-icon-button"
                     style={{ marginRight: 10 }}

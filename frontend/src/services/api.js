@@ -112,6 +112,12 @@ export const api = {
       body: JSON.stringify(capture),
     }),
   listCaptures: (limit = 100) => request(`/api/captures/?limit=${limit}`),
+  getCapture: (id) => request(`/api/captures/${id}`),
+  updateCapture: (id, patch) =>
+    request(`/api/captures/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
   deleteCapture: (id) =>
     request(`/api/captures/${id}`, { method: "DELETE" }),
 };

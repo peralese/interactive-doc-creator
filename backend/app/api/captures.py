@@ -13,6 +13,7 @@ from ..schemas.capture import (
     CaptureCreate,
     CaptureListResponse,
     CaptureResponse,
+    CaptureUpdate,
     PolishRequest,
     PolishResponse,
 )
@@ -74,6 +75,27 @@ async def get_capture(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Capture {capture_id} not found",
         )
+    return capture
+
+
+@router.patch("/{capture_id}", response_model=CaptureResponse)
+async def update_capture(
+    capture_id: UUID,
+    capture_data: CaptureUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an existing capture (e.g. after re-polishing or renaming)."""
+    capture = await db.get(Capture, str(capture_id))
+    if not capture:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Capture {capture_id} not found",
+        )
+    updates = capture_data.model_dump(exclude_unset=True)
+    for field, value in updates.items():
+        setattr(capture, field, value)
+    await db.commit()
+    await db.refresh(capture)
     return capture
 
 

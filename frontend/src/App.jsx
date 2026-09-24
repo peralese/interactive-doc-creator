@@ -164,7 +164,7 @@ function ActivityRow({ item, templates, onResume, onRename, onOpenCapture, onDel
   const capture = item.data;
   return (
     <div className="session-row-wrap">
-      <button className="session-row" onClick={onOpenCapture}>
+      <button className="session-row" onClick={() => onOpenCapture(capture)}>
         <span className="status-dot completed" />
         <span className="session-copy">
           <strong>{capture.name}</strong>
@@ -224,7 +224,7 @@ function AllActivity({ items, templates, onResume, onRename, onOpenCapture, onDe
   );
 }
 
-function Dashboard({ templates, recentItems, loading, onStart, onResume, onImport, onRename, onCapture, onViewAll }) {
+function Dashboard({ templates, recentItems, loading, onStart, onResume, onImport, onRename, onCapture, onOpenCapture, onViewAll }) {
   return (
     <main className="dashboard page-shell">
       <section className="hero">
@@ -310,7 +310,7 @@ function Dashboard({ templates, recentItems, loading, onStart, onResume, onImpor
                 templates={templates}
                 onResume={onResume}
                 onRename={onRename}
-                onOpenCapture={onCapture}
+                onOpenCapture={onOpenCapture}
               />
             ))}
           </div>
@@ -987,6 +987,7 @@ export default function App() {
   const [message, setMessage] = useState("");
   const [namingTemplate, setNamingTemplate] = useState(null); // template pending a name before session create
   const [renamingSession, setRenamingSession] = useState(null); // session pending a rename
+  const [captureToOpen, setCaptureToOpen] = useState(null); // capture selected from the dashboard, if any
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -1167,6 +1168,11 @@ export default function App() {
     }
   };
 
+  const openCapture = (capture) => {
+    setCaptureToOpen(capture);
+    setView("capture");
+  };
+
   const deleteCapture = async (capture) => {
     try {
       await api.deleteCapture(capture.id);
@@ -1217,7 +1223,8 @@ export default function App() {
           onResume={resume}
           onImport={() => setView("import-requirements")}
           onRename={(s) => setRenamingSession(s)}
-          onCapture={() => setView("capture")}
+          onCapture={() => { setCaptureToOpen(null); setView("capture"); }}
+          onOpenCapture={openCapture}
           onViewAll={() => setView("all-activity")}
         />
       )}
@@ -1227,7 +1234,7 @@ export default function App() {
           templates={templates}
           onResume={resume}
           onRename={(s) => setRenamingSession(s)}
-          onOpenCapture={() => setView("capture")}
+          onOpenCapture={openCapture}
           onDeleteCapture={deleteCapture}
           onBack={() => setView("dashboard")}
         />
@@ -1235,7 +1242,8 @@ export default function App() {
       {view === "capture" && (
         <QuickCapture
           standalone={standaloneCapture}
-          onBack={() => { setView("dashboard"); loadDashboard(); }}
+          initialCapture={captureToOpen}
+          onBack={() => { setCaptureToOpen(null); setView("dashboard"); loadDashboard(); }}
         />
       )}
       {view === "import-requirements" && (

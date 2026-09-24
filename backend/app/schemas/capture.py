@@ -18,6 +18,16 @@ class CaptureCreate(BaseModel):
     llm_provider: str | None = Field(None, description="Provider used for polishing")
 
 
+class CaptureUpdate(BaseModel):
+    """Schema for updating an existing capture."""
+
+    name: str | None = Field(None, min_length=1, max_length=200, description="Capture name")
+    raw_transcription: str | None = Field(None, min_length=1, description="Raw transcribed text")
+    clean_prose: str | None = Field(None, description="LLM-polished prose version")
+    structured_breakdown: str | None = Field(None, description="LLM structured breakdown")
+    llm_provider: str | None = Field(None, description="Provider used for polishing")
+
+
 class CaptureResponse(BaseModel):
     """Schema for a single capture response."""
 
