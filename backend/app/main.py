@@ -113,7 +113,11 @@ if FRONTEND_DIST.exists():
         candidate = FRONTEND_DIST / full_path
         if full_path and candidate.is_file():
             return FileResponse(candidate)
-        return FileResponse(FRONTEND_DIST / "index.html")
+        # Hashed /assets files are safe to cache, but index.html names the current
+        # bundle; without this, Safari keeps serving a stale app after a rebuild.
+        return FileResponse(
+            FRONTEND_DIST / "index.html", headers={"Cache-Control": "no-cache"}
+        )
 
 else:
     @app.get("/", tags=["Root"])
