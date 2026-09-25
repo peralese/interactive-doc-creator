@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from io import BytesIO
 from uuid import UUID
 
@@ -12,6 +13,13 @@ from ..models.response import Response
 from ..models.session import Session
 from ..models.template import Template
 from .llm_provider import LLMProvider, LLMProviderError
+
+
+@dataclass
+class DocumentVersions:
+    draft: str
+    refined: str | None
+    refined_stale: bool
 
 
 class DocumentGenerator:
@@ -50,8 +58,31 @@ class DocumentGenerator:
                 lines.extend([f"**{entry.question}**", "", entry.answer.strip(), ""])
         return "\n".join(lines).strip() + "\n"
 
-    async def generate(self, session_id: UUID) -> str:
+    @staticmethod
+    def _versions(session: Session) -> DocumentVersions:
+        return DocumentVersions(
+            draft=session.generated_document or "",
+            refined=session.refined_document,
+            refined_stale=bool(session.refined_document and session.refined_stale),
+        )
+
+    def _ensure_draft(self, session: Session, template: Template, responses: list[Response]) -> None:
+        draft = self._fallback_markdown(template, responses)
+        cached = session.generated_document
+        # Before refined_document existed, "Refine with AI" overwrote the draft cache.
+        # A cached document that isn't the deterministic draft is that refined text.
+        if cached and cached != draft and not session.refined_document:
+            session.refined_document = cached
+            session.refined_stale = False
+        session.generated_document = draft
+
+    async def generate(self, session_id: UUID) -> DocumentVersions:
+        """Refine the answers with the LLM, keeping the rough draft untouched.
+
+        Raises LLMProviderError if refinement fails; both stored versions are left as-is.
+        """
         session, template, responses = await self._load(session_id)
+        self._ensure_draft(session, template, responses)
         response_data = [
             {
                 "section_id": response.section_id,
@@ -63,23 +94,23 @@ class DocumentGenerator:
         ]
         output_type = session.output_type or "report"
         try:
-            content = await self.llm.generate_document(
+            refined = await self.llm.generate_document(
                 template.content, response_data, output_type=output_type
             )
         except LLMProviderError:
-            content = self._fallback_markdown(template, responses)
-        session.generated_document = content
+            await self.db.commit()  # keep the rebuilt draft
+            raise
+        session.refined_document = refined
+        session.refined_stale = False
         await self.db.commit()
-        return content
+        return self._versions(session)
 
-    async def preview(self, session_id: UUID) -> str:
+    async def preview(self, session_id: UUID) -> DocumentVersions:
+        """Return the rough draft (rebuilt without the LLM if needed) and any refined version."""
         session, template, responses = await self._load(session_id)
-        if session.generated_document:
-            return session.generated_document
-        content = self._fallback_markdown(template, responses)
-        session.generated_document = content
-        await self.db.commit()
-        return content
+        self._ensure_draft(session, template, responses)
+        await self.db.commit()  # no-op unless the draft or legacy refined text changed
+        return self._versions(session)
 
     async def export(self, content: str, format: str) -> tuple[bytes, str]:
         if format == "markdown":

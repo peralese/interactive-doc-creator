@@ -104,8 +104,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ session_id: sessionId, format: "markdown" }),
     }),
-  downloadUrl: (sessionId, format) =>
-    `${API_BASE}/api/documents/download/${sessionId}?format=${format}`,
+  downloadUrl: (sessionId, format, version = "draft") =>
+    `${API_BASE}/api/documents/download/${sessionId}?format=${format}&version=${version}`,
   polishCapture: (rawText, provider = "ollama") =>
     request("/api/captures/polish", {
       method: "POST",

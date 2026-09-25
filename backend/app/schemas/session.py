@@ -61,6 +61,8 @@ class SessionResponse(BaseModel):
     metadata: dict[str, Any] = Field(validation_alias="session_metadata")
     current_question_index: int
     generated_document: str | None
+    refined_document: str | None = None
+    refined_stale: bool | None = None
     progress_status: ProgressStatus = "in_progress"
     published_url: str | None = None
     created_at: datetime

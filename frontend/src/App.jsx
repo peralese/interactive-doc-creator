@@ -988,20 +988,42 @@ function Interview({
   );
 }
 
-function Preview({ session, content, loading, onGenerate, onProgressChange, onBack }) {
+const EMPTY_DOCUMENTS = { draft: "", refined: null, refined_stale: false };
+
+function Preview({ session, documents, loading, onGenerate, onProgressChange, onBack }) {
   const [format, setFormat] = useState("markdown");
+  // null = not chosen yet: show the refined version when there is one. Documents can
+  // arrive after mount (resuming), so this is derived rather than set once.
+  const [version, setVersion] = useState(null);
+  const [refining, setRefining] = useState(false);
+  const hasRefined = Boolean(documents.refined);
+  const shown = hasRefined && (version ?? "refined") === "refined" ? "refined" : "draft";
+
+  const refine = async () => {
+    setRefining(true);
+    try {
+      if (await onGenerate()) setVersion("refined");
+    } finally {
+      setRefining(false);
+    }
+  };
+
+  const content = shown === "refined" ? documents.refined : documents.draft;
   return (
     <main className="preview-layout page-shell">
       <aside className="preview-panel">
         <button className="text-button" onClick={onBack}><ArrowLeft size={16} /> Back to interview</button>
         <span className="eyebrow">Your draft</span>
         <h1>Ready for a closer look.</h1>
-        <p>Generate a refined version, then download it in the format that suits your workflow.</p>
-        <button className="primary-button wide" onClick={onGenerate} disabled={loading}>
-          {loading ? <Spinner label="Generating…" /> : <><Sparkles size={17} /> Refine with AI</>}
+        <p>
+          The rough draft is your answers as you gave them. Refine with AI for a polished version —
+          the rough draft is always kept.
+        </p>
+        <button className="primary-button wide" onClick={refine} disabled={loading || refining}>
+          {refining ? <Spinner label="Refining…" /> : <><Sparkles size={17} /> {hasRefined ? "Refine again" : "Refine with AI"}</>}
         </button>
         <div className="download-control">
-          <label htmlFor="format">Download format</label>
+          <label htmlFor="format">Download {shown === "refined" ? "refined version" : "rough draft"}</label>
           <div>
             <select id="format" value={format} onChange={(event) => setFormat(event.target.value)}>
               <option value="markdown">Markdown</option>
@@ -1009,7 +1031,7 @@ function Preview({ session, content, loading, onGenerate, onProgressChange, onBa
               <option value="docx">Word (.docx)</option>
               <option value="pdf">PDF (optional)</option>
             </select>
-            <a className="icon-button" href={api.downloadUrl(session.id, format)} title="Download">
+            <a className="icon-button" href={api.downloadUrl(session.id, format, shown)} title="Download">
               <Download size={18} />
             </a>
           </div>
@@ -1024,13 +1046,37 @@ function Preview({ session, content, loading, onGenerate, onProgressChange, onBa
           />
         </div>
       </aside>
-      <article className="paper">
-        {loading && !content ? (
-          <div className="paper-loading"><Spinner label="Composing your draft…" /></div>
-        ) : (
-          <MarkdownDocument content={content} />
+      <div className="preview-document">
+        {hasRefined && (
+          <div className="version-switch" role="tablist" aria-label="Document version">
+            {[["draft", "Rough draft"], ["refined", "Refined"]].map(([value, label]) => (
+              <button
+                key={value}
+                role="tab"
+                aria-selected={shown === value}
+                className={`version-tab${shown === value ? " active" : ""}`}
+                onClick={() => setVersion(value)}
+              >
+                {label}
+                {value === "refined" && documents.refined_stale && <span className="version-stale-dot" title="Out of date" />}
+              </button>
+            ))}
+          </div>
         )}
-      </article>
+        {shown === "refined" && documents.refined_stale && (
+          <div className="version-stale-note">
+            You’ve changed answers since this was refined, so it may be out of date. The rough
+            draft includes your latest answers — refine again to update this version.
+          </div>
+        )}
+        <article className="paper">
+          {loading && !content ? (
+            <div className="paper-loading"><Spinner label="Composing your draft…" /></div>
+          ) : (
+            <MarkdownDocument content={content} />
+          )}
+        </article>
+      </div>
     </main>
   );
 }
@@ -1062,7 +1108,7 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [responses, setResponses] = useState([]);
-  const [document, setDocument] = useState("");
+  const [documents, setDocuments] = useState(EMPTY_DOCUMENTS); // rough draft + refined version
   const [ingestion, setIngestion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -1117,7 +1163,6 @@ export default function App() {
     selectedTemplate,
     activeSession,
     destination = "interview",
-    savedDocument = "",
   ) => {
     setLoading(true);
     setMessage("");
@@ -1127,7 +1172,7 @@ export default function App() {
       setSession(activeSession);
       setQuestions(mergeSectionReviews(questionData, activeSession.metadata));
       setResponses(activeSession.responses || []);
-      setDocument(savedDocument);
+      setDocuments(EMPTY_DOCUMENTS);
       setView(destination);
     } catch (error) {
       setMessage(error.message);
@@ -1163,12 +1208,9 @@ export default function App() {
     setLoading(true);
     try {
       const resumed = await api.resumeSession(savedSession.id);
-      await openSession(
-        selectedTemplate,
-        resumed,
-        resumed.generated_document ? "preview" : "interview",
-        resumed.generated_document || "",
-      );
+      const hasDocument = Boolean(resumed.generated_document || resumed.refined_document);
+      await openSession(selectedTemplate, resumed, hasDocument ? "preview" : "interview");
+      if (hasDocument) await loadDocuments(resumed.id);
     } catch (error) {
       setMessage(error.message);
       setLoading(false);
@@ -1215,16 +1257,32 @@ export default function App() {
     }
   };
 
-  const preview = async () => {
-    setView("preview");
+  const loadDocuments = async (sessionId) => {
     setLoading(true);
     try {
-      const result = await api.preview(session.id);
-      setDocument(result.content);
+      const { draft, refined, refined_stale } = await api.preview(sessionId);
+      setDocuments({ draft, refined, refined_stale });
     } catch (error) {
       setMessage(error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const preview = async () => {
+    setView("preview");
+    await loadDocuments(session.id);
+  };
+
+  // Resolves true when a refined version was produced.
+  const refineDocument = async () => {
+    try {
+      const { draft, refined, refined_stale } = await api.generate(session.id);
+      setDocuments({ draft, refined, refined_stale });
+      return true;
+    } catch (error) {
+      setMessage(error.message);
+      return false;
     }
   };
 
@@ -1402,21 +1460,11 @@ export default function App() {
       {view === "preview" && (
         <Preview
           session={session}
-          content={document}
+          documents={documents}
           loading={loading}
           onProgressChange={(patch) => updateProgress("session", session.id, patch)}
           onBack={() => setView("interview")}
-          onGenerate={async () => {
-            setLoading(true);
-            try {
-              const result = await api.generate(session.id);
-              setDocument(result.content);
-            } catch (error) {
-              setMessage(error.message);
-            } finally {
-              setLoading(false);
-            }
-          }}
+          onGenerate={refineDocument}
         />
       )}
       {!standaloneCapture && (

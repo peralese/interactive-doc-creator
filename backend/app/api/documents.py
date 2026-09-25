@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.base import get_db
 from ..models.session import Session
-from ..services.document_gen import DocumentGenerator
-from ..services.llm_provider import create_llm_provider
+from ..services.document_gen import DocumentGenerator, DocumentVersions
+from ..services.llm_provider import LLMProviderError, create_llm_provider
 
 router = APIRouter()
 DbSession = Annotated[AsyncSession, Depends(get_db)]
@@ -23,27 +23,53 @@ class DocumentGenerateRequest(BaseModel):
 
 
 class DocumentResponse(BaseModel):
-    """Response schema for generated document."""
+    """Both versions of a session's document.
+
+    ``content`` is the version the call produced (the refined text for /generate,
+    the rough draft for /preview).
+    """
     content: str
     format: str
     session_id: UUID
+    draft: str
+    refined: str | None = None
+    refined_stale: bool = False
+
+
+def _document_response(
+    session_id: UUID, versions: DocumentVersions, content: str, format: str = "markdown"
+) -> DocumentResponse:
+    return DocumentResponse(
+        content=content,
+        format=format,
+        session_id=session_id,
+        draft=versions.draft,
+        refined=versions.refined,
+        refined_stale=versions.refined_stale,
+    )
 
 
 @router.post("/generate", response_model=DocumentResponse)
 async def generate_document(
     request: DocumentGenerateRequest, db: DbSession
 ):
-    """Generate a document from session responses."""
+    """Refine the session's answers with the LLM; the rough draft is kept alongside."""
     generator = DocumentGenerator(db, create_llm_provider())
     try:
-        content = await generator.generate(request.session_id)
+        versions = await generator.generate(request.session_id)
+        content = versions.refined or ""
         if request.format != "markdown":
             await generator.export(content, request.format)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except LLMProviderError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="AI refinement is unavailable right now. Your rough draft and any earlier refined version are unchanged.",
+        ) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
-    return DocumentResponse(content=content, format=request.format, session_id=request.session_id)
+    return _document_response(request.session_id, versions, content, request.format)
 
 
 @router.get("/download/{session_id}")
@@ -51,14 +77,20 @@ async def download_document(
     session_id: UUID,
     db: DbSession,
     format: Literal["markdown", "pdf", "docx", "html"] = "markdown",
+    version: Literal["draft", "refined"] | None = None,
 ):
-    """Download generated document in specified format."""
+    """Download the rough draft or the refined document (default: refined if it exists)."""
     generator = DocumentGenerator(db, create_llm_provider())
     session = await db.get(Session, session_id)
     if session is None:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
     try:
-        content = session.generated_document or await generator.generate(session_id)
+        versions = await generator.preview(session_id)
+        if version is None:
+            version = "refined" if versions.refined else "draft"
+        if version == "refined" and not versions.refined:
+            raise HTTPException(status_code=404, detail="This document has not been refined yet")
+        content = versions.refined if version == "refined" else versions.draft
         body, media_type = await generator.export(content, format)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -69,7 +101,7 @@ async def download_document(
         content=body,
         media_type=media_type,
         headers={
-            "Content-Disposition": f'attachment; filename="document-{session_id}.{extensions[format]}"'
+            "Content-Disposition": f'attachment; filename="document-{session_id}-{version}.{extensions[format]}"'
         },
     )
 
@@ -80,11 +112,11 @@ async def preview_document(
 ):
     """Preview the current state of the document."""
     try:
-        content = await DocumentGenerator(
+        versions = await DocumentGenerator(
             db, create_llm_provider()
         ).preview(session_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return DocumentResponse(content=content, format="markdown", session_id=session_id)
+    return _document_response(session_id, versions, versions.draft)
 
 # Made with Bob

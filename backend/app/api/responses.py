@@ -30,7 +30,7 @@ async def create_response(
         session = await manager.get(response_data.session_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    session.generated_document = None
+    session.invalidate_documents()
     response = Response(**response_data.model_dump())
     db.add(response)
     await manager.record_progress(
@@ -101,7 +101,7 @@ async def update_response(
 
     session = await db.get(Session, response.session_id)
     if session is not None:
-        session.generated_document = None
+        session.invalidate_documents()
 
     await db.commit()
     await db.refresh(response)
@@ -127,7 +127,7 @@ async def delete_response(
     
     session = await db.get(Session, response.session_id)
     if session is not None:
-        session.generated_document = None
+        session.invalidate_documents()
     await db.delete(response)
     await db.commit()
 

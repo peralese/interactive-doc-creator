@@ -14,7 +14,7 @@ from app.api import documents, questions, templates, transcriptions
 from app.config import settings
 from app.main import app
 from app.models.base import Base, get_db
-from app.services.llm_provider import LLMProvider, OpenAIProvider
+from app.services.llm_provider import LLMProvider, LLMProviderError, OpenAIProvider
 from app.services.question_gen import QuestionGenerator
 from app.services.requirements_ingestion import IngestionSource, RequirementsIngestionService
 
@@ -786,3 +786,102 @@ async def test_session_progress_status_protects_finished_work_from_cleanup(clien
         f"/api/sessions/{session_id}", json={"progress_status": "in_progress"}
     )
     assert reopened.json()["status"] == "active"
+
+
+async def _answered_session(client, template_id="versions-template"):
+    template = {
+        "id": template_id,
+        "name": "Versions Project",
+        "description": "Keeps draft and refined text",
+        "content": {"sections": [{"id": "purpose", "title": "Purpose"}]},
+    }
+    assert (await client.post("/api/templates/", json=template)).status_code == 201
+    session_id = (
+        await client.post("/api/sessions/", json={"template_id": template_id, "metadata": {}})
+    ).json()["id"]
+    answer = await client.post(
+        "/api/responses/",
+        json={
+            "session_id": session_id,
+            "section_id": "purpose",
+            "question": "What problem is solved?",
+            "answer": "Raw answer about manual assembly.",
+            "sequence_number": 0,
+        },
+    )
+    return session_id, answer.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_refining_keeps_the_rough_draft(client):
+    session_id, answer_id = await _answered_session(client)
+
+    preview = (await client.get(f"/api/documents/preview/{session_id}")).json()
+    draft = preview["draft"]
+    assert "Raw answer about manual assembly." in draft
+    assert preview["refined"] is None
+
+    refined = (
+        await client.post("/api/documents/generate", json={"session_id": session_id})
+    ).json()
+    assert "# Generated Project" in refined["content"]
+    assert refined["refined"] == refined["content"]
+    assert refined["draft"] == draft
+
+    both = (await client.get(f"/api/documents/preview/{session_id}")).json()
+    assert both["draft"] == draft
+    assert both["refined"] == refined["content"]
+    assert both["refined_stale"] is False
+
+    raw_download = await client.get(
+        f"/api/documents/download/{session_id}?format=markdown&version=draft"
+    )
+    assert raw_download.text == draft
+    assert "-draft.md" in raw_download.headers["content-disposition"]
+    default_download = await client.get(f"/api/documents/download/{session_id}")
+    assert default_download.text == refined["content"]
+
+    # Editing an answer rebuilds the draft and flags, but keeps, the refined text.
+    await client.patch(f"/api/responses/{answer_id}", json={"answer": "Edited answer."})
+    after_edit = (await client.get(f"/api/documents/preview/{session_id}")).json()
+    assert "Edited answer." in after_edit["draft"]
+    assert after_edit["refined"] == refined["content"]
+    assert after_edit["refined_stale"] is True
+
+    rerefined = (
+        await client.post("/api/documents/generate", json={"session_id": session_id})
+    ).json()
+    assert rerefined["refined_stale"] is False
+
+
+@pytest.mark.asyncio
+async def test_failed_refinement_leaves_both_versions(client, monkeypatch):
+    session_id, _ = await _answered_session(client, "failed-refine-template")
+    draft = (await client.get(f"/api/documents/preview/{session_id}")).json()["draft"]
+
+    class FailingProvider(StubProvider):
+        async def generate_document(self, *args, **kwargs):
+            raise LLMProviderError("provider down")
+
+    monkeypatch.setattr(documents, "create_llm_provider", lambda: FailingProvider())
+    failed = await client.post("/api/documents/generate", json={"session_id": session_id})
+    assert failed.status_code == 503
+
+    after = (await client.get(f"/api/documents/preview/{session_id}")).json()
+    assert after["draft"] == draft
+    assert after["refined"] is None
+    missing = await client.get(f"/api/documents/download/{session_id}?version=refined")
+    assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_legacy_refined_text_in_draft_slot_is_recovered(client):
+    session_id, _ = await _answered_session(client, "legacy-refine-template")
+    # Before refined_document existed, refining overwrote generated_document.
+    await client.patch(
+        f"/api/sessions/{session_id}", json={"generated_document": "# Old refined text\n"}
+    )
+
+    preview = (await client.get(f"/api/documents/preview/{session_id}")).json()
+    assert preview["refined"] == "# Old refined text\n"
+    assert "Raw answer about manual assembly." in preview["draft"]

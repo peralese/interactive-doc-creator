@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, Integer, String
+from sqlalchemy import Boolean, DateTime, Enum, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import JSON
 
@@ -41,7 +41,12 @@ class Session(Base):
     current_question_index: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0
     )
+    # Rough draft assembled from the answers without an LLM (a cache; always rebuildable).
     generated_document: Mapped[str | None] = mapped_column(String, nullable=True)
+    # "Refine with AI" output, kept separately so it never replaces the rough draft.
+    refined_document: Mapped[str | None] = mapped_column(String, nullable=True)
+    # True once answers change after refining; the refined text is kept but out of date.
+    refined_stale: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     progress_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
     published_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -55,6 +60,12 @@ class Session(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+
+    def invalidate_documents(self) -> None:
+        """Call whenever answers change: drop the draft cache, flag the refined text."""
+        self.generated_document = None
+        if self.refined_document:
+            self.refined_stale = True
 
     responses: Mapped[list["Response"]] = relationship(
         "Response", back_populates="session", cascade="all, delete-orphan"
