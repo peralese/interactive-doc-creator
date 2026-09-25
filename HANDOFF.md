@@ -6,7 +6,7 @@
 
 **Branch:** `main`
 
-**Base commit:** `88d6c6a` — `feat: track in progress / done / published status on dashboard items`
+**Base commit:** `5eb4ad6` — `fix: stop browsers serving a stale app after a rebuild`
 
 **Working tree:** clean.
 
@@ -221,6 +221,41 @@ Validation: `pytest -q` — 18 passed (2 new: capture status/URL validation and
 session status → lifecycle sync); `npm run lint` and `npm run build` pass; the
 auto-migration was verified on a copy of the real `data/sessions.db`; marking a
 capture Published was confirmed working in the browser.
+
+### Session 2026-09-25 (cont.) — Rough Draft Kept Alongside Refined Version
+
+Problem: "Refine with AI" overwrote `generated_document`, so the rough draft
+built from the raw answers was no longer reachable in the UI.
+
+Implemented (`de6bda8`):
+
+- `generated_document` is now only the deterministic rough-draft cache
+  (`_fallback_markdown`, no LLM). The LLM output lives in the new
+  `refined_document` column; `refined_stale` flags it once answers change.
+- `Session.invalidate_documents()` (called on response create/update/delete)
+  clears the draft cache and marks any refined text stale rather than deleting
+  it.
+- `GET /api/documents/preview/{id}` and `POST /api/documents/generate` return
+  `draft`, `refined`, and `refined_stale` (plus the legacy `content`).
+  Download takes `?version=draft|refined` (default: refined if present);
+  asking for a refined version that doesn't exist returns 404.
+- Legacy sessions: on first preview, a cached document that differs from the
+  deterministic draft is treated as pre-change refined text and moved to
+  `refined_document`. Verified on the real "Logan's Run" session.
+- **Behavior change:** a failed LLM refinement now returns 503 and leaves both
+  versions untouched. Previously it silently saved the rough draft as the
+  "refined" result.
+- Preview shows a Rough draft / Refined switch (defaulting to Refined when it
+  exists), an out-of-date note on stale refined text, and "Refine again".
+
+Also fixed (`5eb4ad6`): `index.html` was served with no `Cache-Control`, so
+Safari (the LAN iPhone/iPad) kept running the previous bundle after a rebuild
+and the new Preview never appeared. The SPA fallback now sends
+`Cache-Control: no-cache`; hashed `/assets` files remain cacheable.
+
+Validation: `pytest -q` — 21 passed (3 new: refine keeps draft + stale flag +
+versioned download; failed refinement leaves both versions; legacy refined
+text recovery). Lint/build pass. Both versions confirmed visible in the browser.
 
 ## Important Test Case and Findings
 
@@ -457,7 +492,7 @@ Both should pass with no errors.
 - `frontend/src/services/api.js`
   — frontend API client.
 - `backend/tests/test_phase2.py`
-  — current integration and regression tests (18 passing).
+  — current integration and regression tests (21 passing).
 - `backend/tests/fixtures/architect_profile_requirements.md`
   — sanitized realistic ingestion regression fixture.
 
@@ -474,9 +509,11 @@ Both should pass with no errors.
 - `POST /api/responses/` — save an answer.
 - `POST /api/transcriptions/` — transcribe uploaded browser audio.
 - `WS /api/transcriptions/stream` — streaming audio transcription.
-- `GET /api/documents/preview/{session_id}` — deterministic Markdown preview.
-- `POST /api/documents/generate` — LLM refinement.
-- `GET /api/documents/download/{session_id}` — export.
+- `GET /api/documents/preview/{session_id}` — deterministic rough draft plus
+  any `refined` version and its `refined_stale` flag.
+- `POST /api/documents/generate` — LLM refinement into `refined_document`
+  (503 on provider failure; the rough draft is never overwritten).
+- `GET /api/documents/download/{session_id}?format=…&version=draft|refined` — export.
 - `PATCH /api/sessions/{id}` — rename, or set `progress_status` / `published_url`.
 - `GET|POST /api/captures/`, `GET|PATCH|DELETE /api/captures/{id}` — Quick
   Capture CRUD, including `progress_status` / `published_url`.
@@ -527,6 +564,9 @@ Both should pass with no errors.
 ## Git Checkpoint
 
 ```text
+5eb4ad6 fix: stop browsers serving a stale app after a rebuild
+de6bda8 feat: keep the rough draft alongside the AI-refined document
+d62531d docs: update handoff for progress status work
 88d6c6a feat: track in progress / done / published status on dashboard items
 dc570f6 fix: allow reopening a saved Quick Capture from the dashboard
 f7f06af docs: add CLAUDE.md
