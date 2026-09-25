@@ -64,6 +64,11 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ name }),
     }),
+  updateSession: (id, patch) =>
+    request(`/api/sessions/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
   resumeSession: (id) => request(`/api/sessions/${id}/resume`),
   autosave: (id, data) =>
     request(`/api/sessions/${id}/autosave`, {

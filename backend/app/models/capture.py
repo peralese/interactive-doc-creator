@@ -23,6 +23,8 @@ class Capture(Base):
     structured_breakdown: Mapped[str | None] = mapped_column(String, nullable=True)
     audio_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     llm_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    progress_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    published_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

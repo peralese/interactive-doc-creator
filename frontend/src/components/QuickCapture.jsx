@@ -2,6 +2,8 @@ import { ArrowLeft, Check, Mic, Square, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
 import { api } from "../services/api";
+import { ProgressStatusControl } from "./ProgressStatus";
+import { progressStatusOf } from "../progressStatus";
 
 const formatDate = (value) =>
   new Intl.DateTimeFormat(undefined, {
@@ -49,6 +51,10 @@ export function QuickCapture({ standalone, initialCapture, onBack }) {
   const [selectedOutput, setSelectedOutput] = useState("prose"); // "prose" | "structured"
   const [captureName, setCaptureName] = useState(initialCapture?.name || "");
   const [editingId, setEditingId] = useState(initialCapture?.id || null);
+  const [progress, setProgress] = useState(() => ({
+    status: progressStatusOf(initialCapture),
+    url: initialCapture?.published_url || null,
+  }));
   const [error, setError] = useState("");
   const [savedCaptures, setSavedCaptures] = useState([]);
   const [loadingCaptures, setLoadingCaptures] = useState(true);
@@ -115,6 +121,7 @@ export function QuickCapture({ standalone, initialCapture, onBack }) {
         ? await api.updateCapture(editingId, payload)
         : await api.saveCapture(payload);
       setEditingId(saved.id);
+      setProgress({ status: progressStatusOf(saved), url: saved.published_url });
       setPhase("saved");
       await loadCaptures();
     } catch {
@@ -131,6 +138,7 @@ export function QuickCapture({ standalone, initialCapture, onBack }) {
     setCaptureName("");
     setSelectedOutput("prose");
     setEditingId(null);
+    setProgress({ status: "in_progress", url: null });
     setError("");
   };
 
@@ -141,9 +149,17 @@ export function QuickCapture({ standalone, initialCapture, onBack }) {
     setCleanProse(capture.clean_prose || "");
     setStructuredBreakdown(capture.structured_breakdown || "");
     setProvider(capture.llm_provider || "ollama");
+    setProgress({ status: progressStatusOf(capture), url: capture.published_url || null });
     setSelectedOutput("prose");
     setError("");
     setPhase(capture.clean_prose || capture.structured_breakdown ? "polished" : "transcribed");
+  };
+
+  const handleProgressChange = async (patch) => {
+    const updated = await api.updateCapture(editingId, patch);
+    setProgress({ status: progressStatusOf(updated), url: updated.published_url });
+    setSavedCaptures((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    return updated;
   };
 
   const handleDelete = async (id) => {
@@ -324,6 +340,19 @@ export function QuickCapture({ standalone, initialCapture, onBack }) {
             </div>
           )}
 
+          {/* Status — only once the capture exists on the server */}
+          {editingId && !isWorking && (
+            <div className="capture-step">
+              <span className="capture-step-label">Status</span>
+              <ProgressStatusControl
+                key={editingId}
+                status={progress.status}
+                publishedUrl={progress.url}
+                onChange={handleProgressChange}
+              />
+            </div>
+          )}
+
           {/* Saved confirmation */}
           {phase === "saved" && (
             <div className="capture-saved-confirm">
@@ -357,7 +386,7 @@ export function QuickCapture({ standalone, initialCapture, onBack }) {
                     onClick={() => openCapture(capture)}
                     style={editingId === capture.id ? { borderColor: "var(--forest)" } : undefined}
                   >
-                    <span className="status-dot completed" />
+                    <span className={`status-dot ${progressStatusOf(capture)}`} />
                     <span className="session-copy">
                       <strong>{capture.name}</strong>
                       <small>

@@ -6,6 +6,8 @@ from uuid import UUID
 from typing import Any
 from pydantic import BaseModel, Field
 
+from .progress import ProgressStatus, ProgressStatusValue, PublishedUrl
+
 
 class SessionStatus(str, Enum):
     """Session status enumeration."""
@@ -35,6 +37,8 @@ class SessionUpdate(BaseModel):
     metadata: dict[str, Any] | None = None
     current_question_index: int | None = Field(None, ge=0)
     generated_document: str | None = None
+    progress_status: ProgressStatusValue | None = None
+    published_url: PublishedUrl = None
 
 
 class SessionAutosave(BaseModel):
@@ -57,6 +61,8 @@ class SessionResponse(BaseModel):
     metadata: dict[str, Any] = Field(validation_alias="session_metadata")
     current_question_index: int
     generated_document: str | None
+    progress_status: ProgressStatus = "in_progress"
+    published_url: str | None = None
     created_at: datetime
     updated_at: datetime
     

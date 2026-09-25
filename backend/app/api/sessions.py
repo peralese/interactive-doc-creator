@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from ..models.base import get_db
-from ..models.session import Session
+from ..models.session import Session, SessionStatus
 from ..models.template import Template
 from ..schemas.session import (
     SessionCreate,
@@ -144,7 +144,15 @@ async def update_session(
         if field == "metadata":
             field = "session_metadata"
         setattr(session, field, value)
-    
+
+    # Finished work must never look expired to cleanup_expired(), which only
+    # deletes ACTIVE/ABANDONED sessions, so mirror progress into the lifecycle status.
+    if "status" not in update_data and "progress_status" in update_data:
+        if session_data.progress_status in ("done", "published"):
+            session.status = SessionStatus.COMPLETED
+        elif session.status == SessionStatus.COMPLETED:
+            session.status = SessionStatus.ACTIVE
+
     await db.commit()
     await db.refresh(session)
     return session

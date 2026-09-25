@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from .progress import ProgressStatus, ProgressStatusValue, PublishedUrl
+
 
 class CaptureCreate(BaseModel):
     """Schema for creating a new capture."""
@@ -26,6 +28,8 @@ class CaptureUpdate(BaseModel):
     clean_prose: str | None = Field(None, description="LLM-polished prose version")
     structured_breakdown: str | None = Field(None, description="LLM structured breakdown")
     llm_provider: str | None = Field(None, description="Provider used for polishing")
+    progress_status: ProgressStatusValue | None = None
+    published_url: PublishedUrl = None
 
 
 class CaptureResponse(BaseModel):
@@ -38,6 +42,8 @@ class CaptureResponse(BaseModel):
     structured_breakdown: str | None
     audio_path: str | None
     llm_provider: str | None
+    progress_status: ProgressStatus = "in_progress"
+    published_url: str | None = None
     created_at: datetime
     updated_at: datetime
 

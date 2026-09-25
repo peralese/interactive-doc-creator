@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Check,
   ChevronRight,
+  CircleCheck,
   Clock3,
   Download,
   FileText,
@@ -22,6 +23,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAudioRecorder } from "./hooks/useAudioRecorder";
 import { api } from "./services/api";
 import { QuickCapture } from "./components/QuickCapture";
+import { ProgressStatusControl, ProgressStatusModal, PublishedLink } from "./components/ProgressStatus";
+import { progressLabel, progressStatusOf } from "./progressStatus";
 
 const OUTPUT_TYPE_LABELS = { report: "Report", blog_post: "Blog Post", summary: "Summary" };
 
@@ -129,16 +132,31 @@ function NameSessionModal({ template, onConfirm, onCancel, defaultOutputType, na
   );
 }
 
-function ActivityRow({ item, templates, onResume, onRename, onOpenCapture, onDeleteCapture }) {
+function ActivityRow({ item, templates, onResume, onRename, onOpenCapture, onDeleteCapture, onEditStatus }) {
+  const progress = progressStatusOf(item.data);
+  const statusActions = (
+    <>
+      {progress === "published" && <PublishedLink url={item.data.published_url} />}
+      <button
+        className="session-rename-btn ghost-icon-button"
+        title="Update status"
+        onClick={(e) => { e.stopPropagation(); onEditStatus(item); }}
+      >
+        <CircleCheck size={14} />
+      </button>
+    </>
+  );
+
   if (item.type === "session") {
     const session = item.data;
     const template = templates.find((t) => t.id === session.template_id);
-    const displayStatus = session.generated_document ? "draft" : session.status;
+    // An unfinished session with a generated document is still worth calling out as a draft.
+    const pillLabel = progress === "in_progress" && session.generated_document ? "Draft" : progressLabel(progress);
     const displayName = session.name || template?.name || session.template_id;
     return (
       <div className="session-row-wrap">
         <button className="session-row" onClick={() => onResume(session)}>
-          <span className={`status-dot ${displayStatus}`} />
+          <span className={`status-dot ${progress}`} />
           <span className="session-copy">
             <strong>{displayName}</strong>
             <small>
@@ -147,9 +165,10 @@ function ActivityRow({ item, templates, onResume, onRename, onOpenCapture, onDel
             </small>
           </span>
           <span className="output-type-badge">{OUTPUT_TYPE_LABELS[session.output_type] || "Report"}</span>
-          <span className="status-pill">{displayStatus}</span>
+          <span className={`status-pill ${progress}`}>{pillLabel}</span>
           <ArrowRight size={18} />
         </button>
+        {statusActions}
         <button
           className="session-rename-btn ghost-icon-button"
           title="Rename session"
@@ -165,7 +184,7 @@ function ActivityRow({ item, templates, onResume, onRename, onOpenCapture, onDel
   return (
     <div className="session-row-wrap">
       <button className="session-row" onClick={() => onOpenCapture(capture)}>
-        <span className="status-dot completed" />
+        <span className={`status-dot ${progress}`} />
         <span className="session-copy">
           <strong>{capture.name}</strong>
           <small>
@@ -174,8 +193,10 @@ function ActivityRow({ item, templates, onResume, onRename, onOpenCapture, onDel
           </small>
         </span>
         <span className="output-type-badge">Capture</span>
+        <span className={`status-pill ${progress}`}>{progressLabel(progress)}</span>
         <ArrowRight size={18} />
       </button>
+      {statusActions}
       {onDeleteCapture && (
         <button
           className="session-rename-btn ghost-icon-button"
@@ -189,7 +210,45 @@ function ActivityRow({ item, templates, onResume, onRename, onOpenCapture, onDel
   );
 }
 
-function AllActivity({ items, templates, onResume, onRename, onOpenCapture, onDeleteCapture, onBack }) {
+const ACTIVITY_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "in_progress", label: "In progress" },
+  { value: "done", label: "Done" },
+  { value: "published", label: "Published" },
+];
+
+const countByProgress = (items) =>
+  items.reduce(
+    (counts, item) => {
+      counts[progressStatusOf(item.data)] += 1;
+      return counts;
+    },
+    { all: items.length, in_progress: 0, done: 0, published: 0 },
+  );
+
+function ActivityFilters({ counts, value, onChange }) {
+  return (
+    <div className="activity-filters" role="tablist" aria-label="Filter by status">
+      {ACTIVITY_FILTERS.map((option) => (
+        <button
+          key={option.value}
+          role="tab"
+          aria-selected={value === option.value}
+          className={`activity-filter${value === option.value ? " active" : ""}`}
+          onClick={() => onChange(option.value)}
+        >
+          {option.value !== "all" && <span className={`status-dot ${option.value}`} />}
+          {option.label}
+          <small>{counts[option.value]}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AllActivity({ items, templates, filter, onFilterChange, onResume, onRename, onOpenCapture, onDeleteCapture, onEditStatus, onBack }) {
+  const counts = countByProgress(items);
+  const visible = filter === "all" ? items : items.filter((item) => progressStatusOf(item.data) === filter);
   return (
     <main className="dashboard page-shell">
       <section className="section-block recent">
@@ -202,9 +261,10 @@ function AllActivity({ items, templates, onResume, onRename, onOpenCapture, onDe
             <ArrowLeft size={16} /> Dashboard
           </button>
         </div>
-        {items.length ? (
+        <ActivityFilters counts={counts} value={filter} onChange={onFilterChange} />
+        {visible.length ? (
           <div className="session-list">
-            {items.map((item) => (
+            {visible.map((item) => (
               <ActivityRow
                 key={`${item.type}-${item.id}`}
                 item={item}
@@ -213,9 +273,12 @@ function AllActivity({ items, templates, onResume, onRename, onOpenCapture, onDe
                 onRename={onRename}
                 onOpenCapture={onOpenCapture}
                 onDeleteCapture={onDeleteCapture}
+                onEditStatus={onEditStatus}
               />
             ))}
           </div>
+        ) : items.length ? (
+          <EmptyState title={`Nothing ${progressLabel(filter).toLowerCase()}`} detail="Try another filter." />
         ) : (
           <EmptyState title="Nothing here yet" detail="Start a document or capture an idea to see it here." />
         )}
@@ -224,7 +287,8 @@ function AllActivity({ items, templates, onResume, onRename, onOpenCapture, onDe
   );
 }
 
-function Dashboard({ templates, recentItems, loading, onStart, onResume, onImport, onRename, onCapture, onOpenCapture, onViewAll }) {
+function Dashboard({ templates, recentItems, loading, onStart, onResume, onImport, onRename, onCapture, onOpenCapture, onEditStatus, onViewAll }) {
+  const counts = countByProgress(recentItems);
   return (
     <main className="dashboard page-shell">
       <section className="hero">
@@ -295,10 +359,17 @@ function Dashboard({ templates, recentItems, loading, onStart, onResume, onImpor
             <span className="kicker">Pick up where you left off</span>
             <h2>Recent activity</h2>
           </div>
-          {recentItems.length > 5 && (
-            <button className="text-button" onClick={onViewAll}>
-              View all <ChevronRight size={15} />
-            </button>
+          {recentItems.length > 0 && (
+            <div className="activity-summary">
+              {ACTIVITY_FILTERS.filter((option) => option.value !== "all" && counts[option.value]).map((option) => (
+                <button key={option.value} className="text-button" onClick={() => onViewAll(option.value)}>
+                  <span className={`status-dot ${option.value}`} /> {counts[option.value]} {option.label.toLowerCase()}
+                </button>
+              ))}
+              <button className="text-button" onClick={() => onViewAll("all")}>
+                View all <ChevronRight size={15} />
+              </button>
+            </div>
           )}
         </div>
         {recentItems.length ? (
@@ -311,6 +382,7 @@ function Dashboard({ templates, recentItems, loading, onStart, onResume, onImpor
                 onResume={onResume}
                 onRename={onRename}
                 onOpenCapture={onOpenCapture}
+                onEditStatus={onEditStatus}
               />
             ))}
           </div>
@@ -916,7 +988,7 @@ function Interview({
   );
 }
 
-function Preview({ session, content, loading, onGenerate, onBack }) {
+function Preview({ session, content, loading, onGenerate, onProgressChange, onBack }) {
   const [format, setFormat] = useState("markdown");
   return (
     <main className="preview-layout page-shell">
@@ -941,6 +1013,15 @@ function Preview({ session, content, loading, onGenerate, onBack }) {
               <Download size={18} />
             </a>
           </div>
+        </div>
+        <div className="download-control">
+          <label>Status</label>
+          <ProgressStatusControl
+            key={session.id}
+            status={progressStatusOf(session)}
+            publishedUrl={session.published_url}
+            onChange={onProgressChange}
+          />
         </div>
       </aside>
       <article className="paper">
@@ -988,6 +1069,8 @@ export default function App() {
   const [namingTemplate, setNamingTemplate] = useState(null); // template pending a name before session create
   const [renamingSession, setRenamingSession] = useState(null); // session pending a rename
   const [captureToOpen, setCaptureToOpen] = useState(null); // capture selected from the dashboard, if any
+  const [statusTarget, setStatusTarget] = useState(null); // activity item whose status is being edited
+  const [activityFilter, setActivityFilter] = useState("all");
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -1168,6 +1251,19 @@ export default function App() {
     }
   };
 
+  // Shared by the dashboard rows, the preview screen, and Quick Capture.
+  const updateProgress = async (type, id, patch) => {
+    if (type === "session") {
+      const updated = await api.updateSession(id, patch);
+      setSessions((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+      setSession((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
+      return updated;
+    }
+    const updated = await api.updateCapture(id, patch);
+    setCaptures((items) => items.map((item) => (item.id === updated.id ? updated : item)));
+    return updated;
+  };
+
   const openCapture = (capture) => {
     setCaptureToOpen(capture);
     setView("capture");
@@ -1214,6 +1310,18 @@ export default function App() {
           onCancel={() => setRenamingSession(null)}
         />
       )}
+      {statusTarget && (
+        <ProgressStatusModal
+          title={
+            statusTarget.type === "capture"
+              ? statusTarget.data.name
+              : statusTarget.data.name || templates.find((t) => t.id === statusTarget.data.template_id)?.name || "Document"
+          }
+          item={statusTarget.data}
+          onChange={(patch) => updateProgress(statusTarget.type, statusTarget.id, patch)}
+          onClose={() => setStatusTarget(null)}
+        />
+      )}
       {view === "dashboard" && (
         <Dashboard
           templates={templates}
@@ -1225,13 +1333,17 @@ export default function App() {
           onRename={(s) => setRenamingSession(s)}
           onCapture={() => { setCaptureToOpen(null); setView("capture"); }}
           onOpenCapture={openCapture}
-          onViewAll={() => setView("all-activity")}
+          onEditStatus={setStatusTarget}
+          onViewAll={(filter) => { setActivityFilter(filter); setView("all-activity"); }}
         />
       )}
       {view === "all-activity" && (
         <AllActivity
           items={recentItems}
           templates={templates}
+          filter={activityFilter}
+          onFilterChange={setActivityFilter}
+          onEditStatus={setStatusTarget}
           onResume={resume}
           onRename={(s) => setRenamingSession(s)}
           onOpenCapture={openCapture}
@@ -1292,6 +1404,7 @@ export default function App() {
           session={session}
           content={document}
           loading={loading}
+          onProgressChange={(patch) => updateProgress("session", session.id, patch)}
           onBack={() => setView("interview")}
           onGenerate={async () => {
             setLoading(true);

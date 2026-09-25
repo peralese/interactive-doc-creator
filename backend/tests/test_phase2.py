@@ -726,3 +726,63 @@ def test_requirements_analysis_caps_generated_question_count():
         "limited to 200 questions" in warning
         for warning in template["content"]["analysis_warnings"]
     )
+
+
+@pytest.mark.asyncio
+async def test_capture_progress_status_and_published_url(client):
+    created = await client.post(
+        "/api/captures/",
+        json={"name": "VPN Solution", "raw_transcription": "Notes about the VPN."},
+    )
+    assert created.status_code == 201
+    capture = created.json()
+    assert capture["progress_status"] == "in_progress"
+    assert capture["published_url"] is None
+
+    published = await client.patch(
+        f"/api/captures/{capture['id']}",
+        json={"progress_status": "published", "published_url": " https://example.com/vpn "},
+    )
+    assert published.status_code == 200
+    assert published.json()["progress_status"] == "published"
+    assert published.json()["published_url"] == "https://example.com/vpn"
+
+    # Unrelated edits (e.g. re-saving the capture text) leave the status alone.
+    renamed = await client.patch(f"/api/captures/{capture['id']}", json={"name": "VPN"})
+    assert renamed.json()["progress_status"] == "published"
+
+    bad_status = await client.patch(
+        f"/api/captures/{capture['id']}", json={"progress_status": "shipped"}
+    )
+    assert bad_status.status_code == 422
+    bad_url = await client.patch(
+        f"/api/captures/{capture['id']}", json={"published_url": "javascript:alert(1)"}
+    )
+    assert bad_url.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_session_progress_status_protects_finished_work_from_cleanup(client):
+    template = {
+        "id": "progress-status-template",
+        "name": "Progress status test",
+        "description": "Tracks finished documents",
+        "content": {"sections": [{"id": "purpose", "title": "Purpose"}]},
+    }
+    assert (await client.post("/api/templates/", json=template)).status_code == 201
+    created = await client.post(
+        "/api/sessions/", json={"template_id": template["id"], "metadata": {}}
+    )
+    session_id = created.json()["id"]
+    assert created.json()["progress_status"] == "in_progress"
+
+    done = await client.patch(f"/api/sessions/{session_id}", json={"progress_status": "done"})
+    assert done.status_code == 200
+    assert done.json()["progress_status"] == "done"
+    # cleanup_expired() only deletes active/abandoned sessions.
+    assert done.json()["status"] == "completed"
+
+    reopened = await client.patch(
+        f"/api/sessions/{session_id}", json={"progress_status": "in_progress"}
+    )
+    assert reopened.json()["status"] == "active"

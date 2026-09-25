@@ -42,6 +42,8 @@ class Session(Base):
         Integer, nullable=False, default=0
     )
     generated_document: Mapped[str | None] = mapped_column(String, nullable=True)
+    progress_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    published_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

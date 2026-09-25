@@ -78,6 +78,36 @@ h1, h2 { font-family: Georgia, serif; font-weight: 400; margin: 0; }
 .session-row:last-child { border: 0; }.session-row:hover { background: var(--paper); }
 .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #d39b49; }.status-dot.completed { background: #4c8b72; }
 .status-dot.draft { background: #4c8b72; }
+.status-dot { flex: 0 0 auto; }
+.status-dot.in_progress { background: #d39b49; }
+.status-dot.done { background: #4c8b72; }
+.status-dot.published { background: var(--ink); box-shadow: 0 0 0 3px var(--mint); }
+.status-pill.done { color: var(--forest); border-color: #a9c7b6; }
+.status-pill.published { color: #fff; background: var(--ink); border-color: var(--ink); }
+.session-row-wrap > a.ghost-icon-button { flex: 0 0 auto; }
+.session-row-wrap .session-rename-btn + .session-rename-btn,
+.session-row-wrap a.ghost-icon-button + .session-rename-btn { margin-left: -6px; }
+.activity-summary { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px 18px; }
+.activity-summary .status-dot { width: 7px; height: 7px; }
+.activity-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.activity-filter { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 20px; padding: 7px 13px; font-size: 13px; cursor: pointer; }
+.activity-filter small { color: var(--muted); font-size: 11px; }
+.activity-filter.active { background: var(--ink); border-color: var(--ink); color: #fff; }
+.activity-filter.active small { color: rgba(255,255,255,.7); }
+.progress-control { display: grid; gap: 10px; }
+.download-control > .progress-control { display: grid; }
+.progress-segments { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--paper); }
+.progress-segment { border: 0; border-left: 1px solid var(--line); background: none; padding: 10px 8px; display: inline-flex; justify-content: center; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.progress-segment:first-child { border-left: 0; }
+.progress-segment:hover:not(:disabled) { color: var(--ink); background: rgba(23,63,55,.04); }
+.progress-segment.active { background: var(--mint); color: var(--ink); font-weight: 600; }
+.progress-segment .status-dot { width: 7px; height: 7px; }
+.progress-url-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.progress-url-row input { flex: 1 1 220px; min-width: 0; }
+.progress-published-note { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.progress-published-note a { color: var(--forest); display: inline-flex; align-items: center; gap: 5px; overflow-wrap: anywhere; }
+.progress-error { color: var(--coral); font-size: 13px; margin: 0; }
+.progress-modal-subtitle { color: var(--muted); margin: -8px 0 20px; font-size: 14px; }
 .session-copy { flex: 1; display: grid; gap: 3px; }.session-copy small { color: var(--muted); }
 .status-pill { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; border: 1px solid var(--line); border-radius: 20px; padding: 5px 8px; color: var(--muted); }
 .output-type-badge { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; border-radius: 20px; padding: 5px 8px; background: var(--mint); color: var(--forest); font-weight: 600; }
@@ -297,6 +327,7 @@ footer span { display: flex; gap: 6px; align-items: center; }
   .generated-question-list li { grid-template-columns: 30px 1fr; padding: 15px; }.generated-question-list small { grid-column: 2; justify-self: start; }
   .question-review-actions { align-items: stretch; flex-direction: column; gap: 10px; }.question-review-actions button { width: 100%; }
   .template-card { padding: 17px; }.status-pill { display: none; }
+  .activity-summary { justify-content: flex-start; }.progress-segment { padding: 10px 4px; font-size: 12px; }
   .question-stage h1 { font-size: 36px; }.question-actions { flex-direction: column-reverse; }.question-actions button { width: 100%; }
   footer { justify-content: center; } footer span + span { display: none; }
 }
