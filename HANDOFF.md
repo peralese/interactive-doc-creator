@@ -1,15 +1,14 @@
 # Project Handoff — Interactive Document Creator (Draftwise)
 
-**Updated:** July 27, 2026
+**Updated:** September 25, 2026
 
 **Repository:** `https://github.com/peralese/interactive-doc-creator.git`
 
 **Branch:** `main`
 
-**Base commit:** `ea508cd` — `Save drafts and filter empty sessions`
+**Base commit:** `88d6c6a` — `feat: track in progress / done / published status on dashboard items`
 
-**Working tree:** Phase 3B completion changes are implemented and validated but
-not yet committed.
+**Working tree:** clean.
 
 ## Purpose of This Handoff
 
@@ -168,6 +167,60 @@ OpenAI `gpt-5.6-terra`; question list generated correctly.
 
 Phase 3B is complete. The current product phase is Phase 4 — Template Studio
 and Reuse.
+
+### Aug 4 – Sep 24, 2026 — Features Landed Between Handoff Updates
+
+This file was not updated for these commits; recorded here from the git log so
+the history stays continuous:
+
+- `e4ea2d4` / `dd049fd` — session naming and output types
+  (`report`, `blog_post`, `summary`).
+- `1fac6cc` — Quick Capture: record an idea, transcribe locally, polish into
+  clean prose + structured breakdown (Ollama by default, OpenAI opt-in).
+- `023b707` — `init_db()` auto-adds missing nullable columns on startup.
+- `b74ddca` / `8128793` — backend serves the built frontend; app served over
+  the LAN via an HTTPS reverse proxy.
+- `1427066` / `dc570f6` — iOS recording reliability; captures merged into the
+  dashboard's Recent activity; saved captures can be reopened and edited.
+
+### Session 2026-09-25 — Progress Status (In progress / Done / Published)
+
+Problem: the dashboard had no way to show that work was finished — every
+capture showed the same green dot, and a capture already posted to the blog
+looked identical to a fresh idea.
+
+Implemented (`88d6c6a`):
+
+- Sessions and captures have `progress_status` (`in_progress` | `done` |
+  `published`) and an optional `published_url`. Both are nullable columns, so
+  the startup auto-migration adds them; `NULL` reads as `in_progress`.
+  Shared validation lives in `backend/app/schemas/progress.py` (URL must be
+  `http(s)://`).
+- `PATCH /api/sessions/{id}` mirrors progress into the lifecycle `status`:
+  done/published → `completed`, back to in progress → `active`. This keeps
+  `cleanup_expired()` (which deletes only active/abandoned sessions) from ever
+  deleting finished work. `progress_status` is deliberately separate from
+  `Session.status`, which the lifecycle/cleanup code owns.
+- Status can be changed from a ✓ button on each activity row (modal), the
+  document preview sidebar, and the Status step of a saved Quick Capture.
+  Choosing Published prompts for the optional link; published rows show a dark
+  pill and an external-link icon.
+- All activity has status filter chips with counts; the dashboard's Recent
+  activity header shows per-status counts that jump to the filtered list.
+- The status control reports an error if the server responds without saving
+  the requested status, instead of silently reverting.
+
+Operational finding: the long-running backend on `:8000` (started with
+`--host 0.0.0.0`, no `--reload`) kept serving old code after the change. It
+accepted the PATCH, ignored the unknown fields, and returned 200, so the UI
+snapped back to "In progress". **Restart the backend after backend changes**
+unless it was started via `./run.sh` (which reloads but binds `127.0.0.1`).
+It was restarted with the same flags, logging to `data/backend.log`.
+
+Validation: `pytest -q` — 18 passed (2 new: capture status/URL validation and
+session status → lifecycle sync); `npm run lint` and `npm run build` pass; the
+auto-migration was verified on a copy of the real `data/sessions.db`; marking a
+capture Published was confirmed working in the browser.
 
 ## Important Test Case and Findings
 
@@ -391,12 +444,20 @@ Both should pass with no errors.
   — local Faster Whisper transcription.
 - `backend/app/services/document_gen.py`
   — preview, refinement, and export.
+- `backend/app/models/capture.py`, `backend/app/services/capture_service.py`
+  — Quick Capture model and LLM polish.
+- `backend/app/schemas/progress.py`
+  — shared `progress_status` / `published_url` validation.
 - `frontend/src/App.jsx`
   — dashboard, import, template review, question review, interview, preview.
+- `frontend/src/components/QuickCapture.jsx`
+  — Quick Capture record/polish/save screen.
+- `frontend/src/components/ProgressStatus.jsx`, `frontend/src/progressStatus.js`
+  — status control, status modal, published link, and shared status helpers.
 - `frontend/src/services/api.js`
   — frontend API client.
 - `backend/tests/test_phase2.py`
-  — current integration and regression tests (16 passing).
+  — current integration and regression tests (18 passing).
 - `backend/tests/fixtures/architect_profile_requirements.md`
   — sanitized realistic ingestion regression fixture.
 
@@ -416,6 +477,10 @@ Both should pass with no errors.
 - `GET /api/documents/preview/{session_id}` — deterministic Markdown preview.
 - `POST /api/documents/generate` — LLM refinement.
 - `GET /api/documents/download/{session_id}` — export.
+- `PATCH /api/sessions/{id}` — rename, or set `progress_status` / `published_url`.
+- `GET|POST /api/captures/`, `GET|PATCH|DELETE /api/captures/{id}` — Quick
+  Capture CRUD, including `progress_status` / `published_url`.
+- `POST /api/captures/polish` — polish a raw transcription (Ollama or OpenAI).
 
 ## Known Limitations
 
@@ -462,6 +527,11 @@ Both should pass with no errors.
 ## Git Checkpoint
 
 ```text
+88d6c6a feat: track in progress / done / published status on dashboard items
+dc570f6 fix: allow reopening a saved Quick Capture from the dashboard
+f7f06af docs: add CLAUDE.md
+1427066 fix: iOS recording reliability; merge captures into dashboard
+8128793 feat: serve app over LAN via HTTPS reverse proxy
 ac9b965 Add missing models package and fix startup and provider issues
 3b8994f Align implementation status with current roadmap
 711e6b9 Update project handoff for machine transfer
@@ -473,6 +543,6 @@ After updating this file:
 
 ```bash
 git add HANDOFF.md docs/IMPLEMENTATION_STATUS.md
-git commit -m "Update handoff and status for 2026-07-27 session"
+git commit -m "Update handoff for 2026-09-25 session"
 git push origin main
 ```
